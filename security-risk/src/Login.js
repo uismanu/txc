@@ -1,33 +1,46 @@
 // src/Login.js
-import React, { useState, useEffect } from 'react'; // <<-- Añadir useEffect
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
   TextField,
   Button,
   Paper,
+  Alert, // Para mostrar mensajes de error/éxito
 } from '@mui/material';
 import tecemLogo from './assets/tecem-logo.png';
-import { useLocation } from 'react-router-dom'; // <<-- Añadir useLocation
+import { useNavigate, useLocation } from 'react-router-dom'; // Importar useNavigate
 
 function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const location = useLocation(); // <<-- Obtener la ubicación
+  const [error, setError] = useState(''); // Estado para mensajes de error
+  const navigate = useNavigate(); // Hook para la navegación
+  const location = useLocation();
 
   useEffect(() => {
     console.log("Ruta actual en Login.js:", location.pathname);
+    // Opcional: limpiar cualquier token/rol si el usuario llega aquí sin estar logueado
+    localStorage.removeItem('userRole');
   }, [location]);
 
   const handleLogin = (event) => {
     event.preventDefault();
-    console.log('Usuario:', username);
-    console.log('Contraseña:', password);
-    alert(`Intentando iniciar sesión con usuario: ${username}`);
+    setError(''); // Limpiar errores anteriores
+
+    // Simulación de autenticación
+    if (username === 'standard' && password === 'pass') {
+      localStorage.setItem('userRole', 'standard'); // Almacenar el rol
+      navigate('/'); // Redirigir al Home
+    } else if (username === 'professional' && password === 'pass') {
+      localStorage.setItem('userRole', 'professional'); // Almacenar el rol
+      navigate('/'); // Redirigir al Home
+    } else {
+      setError('Usuario o contraseña incorrectos.');
+    }
   };
 
   return (
-
     <Box
       sx={{
         display: 'flex',
@@ -35,12 +48,12 @@ function Login() {
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: '100vh',
-        bgcolor: '#F0F2F5', // Color de fondo similar al de tu aplicación
+        bgcolor: '#F0F2F5',
         p: 2,
       }}
     >
       <Paper
-        elevation={0} // Sin sombra para un look más plano
+        elevation={0}
         sx={{
           p: 4,
           borderRadius: '8px',
@@ -58,7 +71,7 @@ function Login() {
             style={{
               width: '100%',
               height: 'auto',
-              maxWidth: '250px', // Ajusta el tamaño del logo si es necesario
+              maxWidth: '250px',
             }}
           />
         </Box>
@@ -66,6 +79,12 @@ function Login() {
         <Typography variant="h5" component="h1" gutterBottom sx={{ mb: 3 }}>
           Iniciar Sesión
         </Typography>
+
+        {error && ( // Mostrar el mensaje de error si existe
+          <Alert severity="error" sx={{ mb: 2, width: '100%' }}>
+            {error}
+          </Alert>
+        )}
 
         <form onSubmit={handleLogin} style={{ width: '100%' }}>
           <TextField

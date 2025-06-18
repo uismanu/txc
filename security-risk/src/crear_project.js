@@ -26,7 +26,7 @@ import securityIcon from './assets/security-icon.png';
 function CrearProject() {
   const navigate = useNavigate();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  // const isMobile = useMediaQuery(theme.breakpoints.down('sm')); // <<-- Eliminada: no se usa
 
   const [projectName, setProjectName] = useState('Nombre del Proyecto');
   const [isEditingProjectName, setIsEditingProjectName] = useState(false);
@@ -69,33 +69,51 @@ function CrearProject() {
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: '#F0F2F5' }}>
-      {/* AppBar ESPECÍFICO PARA CREAR PROYECTO */}
+    <Box sx={{
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: '100vh',
+      bgcolor: '#F0F2F5',
+      p: '20px', // Aplicado padding al contenedor principal para consistencia
+    }}>
+      {/* AppBar CONSISTENTE CON HOME.JS */}
       <AppBar
         position="static"
         elevation={0}
         sx={{
           bgcolor: 'background.paper',
           color: 'text.primary',
-          borderRadius: '8px', // <<-- AÑADIDO: Bordes redondeados
-          mb: '20px', // <<-- AÑADIDO: Margen inferior
+          borderRadius: '8px',
+          mb: '20px',
           flexShrink: 0,
         }}
       >
         <Toolbar sx={{ justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <IconButton onClick={() => navigate('/')} sx={{ mr: 1 }}>
-              <ArrowBackIcon />
-            </IconButton>
             <img src={securityIcon} alt="Security Icon" style={{ width: '32px', height: '32px' }} />
             <Typography
-              variant={isMobile ? "h6" : "h5"}
+              variant="h5"
               component="div"
               fontWeight="bold"
             >
-              {isMobile ? "Nuevo Proyecto" : "Crear Nuevo Proyecto"}
+              Crear Nuevo Proyecto
             </Typography>
           </Box>
+          <Button
+            variant="contained"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/')}
+            sx={{
+              textTransform: 'none',
+              borderRadius: '8px',
+              bgcolor: '#1976d2',
+              '&:hover': {
+                bgcolor: '#1565c0',
+              }
+            }}
+          >
+            Volver
+          </Button>
         </Toolbar>
       </AppBar>
 
@@ -109,7 +127,7 @@ function CrearProject() {
             md: '65% 1fr',
           },
           gap: '20px',
-          p: '20px', // Este padding es para el contenido debajo del AppBar
+          // p: '20px', // Eliminado de aquí, ahora lo gestiona el Box padre
         }}
       >
         {/* Columna Izquierda: Detalles del Proyecto */}
