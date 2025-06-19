@@ -1,5 +1,5 @@
 // src/Home.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -28,19 +28,30 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
-import ExitToAppIcon from '@mui/icons-material/ExitToApp'; // Importar el icono de Cerrar Sesión
+import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 
 import { useNavigate } from 'react-router-dom';
 
 import securityIcon from './assets/security-icon.png';
 import tecemLogo from './assets/tecem-logo.png';
 
+// La función getRiskColor se mantendrá pero sus inputs ya no serán los valores en tiempo real de los sliders para el gráfico
+const getRiskColor = (probability, impact) => {
+  const combinedRiskForHue = (probability + impact) / 2;
+  const hue = (100 - combinedRiskForHue) * 1.2;
+
+  const saturation = 50 + (impact * 0.5);
+  const lightness = 60 - (impact * 0.2);
+
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+};
+
 function Home() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
-  const [userRole, setUserRole] = useState(localStorage.getItem('userRole') || 'guest');
+  const [userRole] = useState(localStorage.getItem('userRole') || 'guest');
 
   useEffect(() => {
     if (!localStorage.getItem('userRole')) {
@@ -53,6 +64,9 @@ function Home() {
   const showHotspotColumn = userRole === 'professional';
   const enableAddSimulationButton = userRole === 'professional';
 
+  const showInterviewerAgent = userRole === 'standard';
+  const showEvaluatorAgent = userRole === 'professional';
+
   const projects = showSavedProjects ? [
     'Auditoría de Seguridad de Red',
     'Evaluación de Riesgos de Instalaciones',
@@ -60,16 +74,28 @@ function Home() {
     'Revisión de Seguridad de la Cadena de Suministro',
   ] : [];
 
-  const [activeTab, setActiveTab] = useState(0);
-  const [messages, setMessages] = useState([
+  const interviewerMessages = useMemo(() => [
     { id: 1, type: 'agent', text: '¡Hola! Soy el Asistente de Gestión de Riesgos de Seguridad. Ayudaré a evaluar amenazas y vulnerabilidades de seguridad. Por favor, proporcione una descripción general de su red.' },
     { id: 2, type: 'user', text: 'Nuestra red incluye firewalls y protocolos de cifrado.' },
-  ]);
-  const [chatInput, setChatInput] = useState('');
-  const [generatedOutputFile, setGeneratedOutputFile] = useState(null);
+  ], []);
 
-  const [sliderValue1, setSliderValue1] = useState(50);
-  const [sliderValue2, setSliderValue2] = useState(50);
+  const evaluatorMessages = useMemo(() => [
+    { id: 1, type: 'agent', text: '¡Hola! Soy el Agente Evaluador. Estoy listo para analizar los riesgos. ¿Hay algún informe o datos específicos que le gustaría que revise?' },
+    { id: 2, type: 'user', text: 'Sí, revisa el informe de auditoría reciente.' },
+  ], []);
+
+  const [messages, setMessages] = useState([]);
+
+  const [chatInput, setChatInput] = useState('');
+
+  const [attachedFiles, setAttachedFiles] = useState([
+    { id: 1, name: 'documento_adjunto_1.pdf' },
+    { id: 2, name: 'imagen_de_red.png' },
+  ]);
+
+  // Los estados de los sliders se mantienen, pero ya no afectarán el SVG del gráfico
+  const [probabilitySliderValue, setProbabilitySliderValue] = useState(50); // Renombrado para claridad
+  const [impactSliderValue, setImpactSliderValue] = useState(50);         // Renombrado para claridad
 
   const [projectsExpanded, setProjectsExpanded] = useState(isDesktop);
 
@@ -81,48 +107,95 @@ function Home() {
     }
   };
 
-  const handleChangeTab = (event, newValue) => {
-    setActiveTab(newValue);
-  };
-
   const handleSendMessage = () => {
     if (chatInput.trim() === '') return;
     const newId = messages.length > 0 ? Math.max(...messages.map(m => m.id)) + 1 : 1;
-    setMessages([...messages, { id: newId, type: 'user', text: chatInput.trim() }]);
+    let userMessage = { id: newId, type: 'user', text: chatInput.trim() };
+
+    // Opcional: Si quieres simular que los sliders afectan la respuesta del agente
+    // podrías añadir los valores de los sliders al mensaje que envías,
+    // o disparar una lógica diferente según esos valores.
+    // Ejemplo: userMessage.text += ` (Prob: ${probabilitySliderValue}%, Impact: ${impactSliderValue}%)`;
+
+    setMessages([...messages, userMessage]);
     setChatInput('');
   };
 
   const handleExportData = () => {
-    alert('Simulando la exportación de datos del chat...');
-    setGeneratedOutputFile('informe_analisis_total.pdf');
+    alert('Simulando la descarga del informe en PDF...');
   };
 
   const handleAddSimulation = () => {
     alert('Simulando la adición de una simulación...');
-    setGeneratedOutputFile('resultados_simulacion_detallados.xlsx');
+    const newFileId = attachedFiles.length > 0 ? Math.max(...attachedFiles.map(f => f.id)) + 1 : 1;
+    setAttachedFiles([...attachedFiles, { id: newFileId, name: `simulacion_generada_${newFileId}.xlsx` }]);
   };
 
   const handleUploadClick = () => {
     alert('Simulando la carga de un archivo...');
+    const newFileId = attachedFiles.length > 0 ? Math.max(...attachedFiles.map(f => f.id)) + 1 : 1;
+    setAttachedFiles([...attachedFiles, { id: newFileId, name: `archivo_subido_${newFileId}.jpg` }]);
   };
 
-  const handleSliderChange1 = (event, newValue) => {
-    setSliderValue1(newValue);
+  // Los onChange de los sliders solo actualizarán su propio estado
+  const handleProbabilitySliderChange = (event, newValue) => {
+    setProbabilitySliderValue(newValue);
+    // console.log("Probabilidad para perfilar pregunta:", newValue); // Opcional: log para ver el valor
   };
 
-  const handleSliderChange2 = (event, newValue) => {
-    setSliderValue2(newValue);
+  const handleImpactSliderChange = (event, newValue) => {
+    setImpactSliderValue(newValue);
+    // console.log("Impacto para perfilar pregunta:", newValue); // Opcional: log para ver el valor
   };
 
-  // Función para cerrar sesión
   const handleLogout = () => {
-    localStorage.removeItem('userRole'); // Eliminar el rol del usuario
-    navigate('/login'); // Redirigir a la página de login
+    localStorage.removeItem('userRole');
+    navigate('/login');
   };
 
   useEffect(() => {
     setProjectsExpanded(isDesktop);
-  }, [isDesktop]);
+    if (userRole === 'standard') {
+      setMessages(interviewerMessages);
+    } else if (userRole === 'professional') {
+      setMessages(evaluatorMessages);
+    }
+  }, [isDesktop, userRole, interviewerMessages, evaluatorMessages]);
+
+  // **Cálculos para el SVG AHORA SON ESTÁTICOS o usan valores iniciales predefinidos**
+  // Representarán un resultado "típico" o inicial de un análisis.
+  const staticProbabilityForGraph = 60; // Ejemplo: un 60% de probabilidad fija para el gráfico
+  const staticImpactForGraph = 75;       // Ejemplo: un 75% de impacto fijo para el gráfico
+
+  const svgWidth = 220;
+  const svgHeight = 220;
+  const svgCenterX = svgWidth / 2;
+  const svgCenterY = svgHeight / 2;
+  const baseRadius = 20;
+  const maxRadiusIncrease = 70;
+  const maxRadius = baseRadius + maxRadiusIncrease;
+
+  // El radio del polígono ahora depende de 'staticProbabilityForGraph'
+  const graphPolygonRadius = baseRadius + (staticProbabilityForGraph / 100) * maxRadiusIncrease;
+
+  const points = [];
+  const numPoints = 5;
+  const angleIncrement = (2 * Math.PI) / numPoints;
+
+  for (let i = 0; i < numPoints; i++) {
+    const angle = i * angleIncrement - Math.PI / 2;
+    const x = svgCenterX + graphPolygonRadius * Math.cos(angle);
+    const y = svgCenterY + graphPolygonRadius * Math.sin(angle);
+    points.push(`${x},${y}`);
+  }
+  const polygonPoints = points.join(' ');
+
+  // El color del polígono ahora depende de 'staticProbabilityForGraph' y 'staticImpactForGraph'
+  const polygonColor = getRiskColor(staticProbabilityForGraph, staticImpactForGraph);
+
+  // El riesgo promedio para el texto central también es estático
+  const averageRisk = (staticProbabilityForGraph + staticImpactForGraph) / 2;
+
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', p: '20px', bgcolor: '#F0F2F5' }}>
@@ -149,7 +222,7 @@ function Home() {
               Asistente de Gestión de Riesgos de Seguridad
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}> {/* Contenedor para botones de acción */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {showCreateProjectButton && (
               <Button
                 variant="contained"
@@ -162,28 +235,27 @@ function Home() {
                   '&:hover': {
                     bgcolor: '#1565c0',
                   },
-                  mr: 1, // Margen a la derecha para separar del botón de logout
+                  mr: 1,
                 }}
               >
                 Nuevo Proyecto
               </Button>
             )}
-            {/* Botón de Cerrar Sesión */}
             <Button
-              variant="outlined" // O "contained" si prefieres un estilo más prominente
+              variant="outlined"
               startIcon={<ExitToAppIcon />}
               onClick={handleLogout}
               sx={{
                 textTransform: 'none',
                 borderRadius: '8px',
-                borderColor: '#e0e0e0', // Borde para el estilo outlined
-                color: 'text.primary',  // Color del texto para el estilo outlined
-                bgcolor: 'background.paper', // Fondo blanco para el estilo outlined
+                borderColor: '#e0e0e0',
+                color: 'text.primary',
+                bgcolor: 'background.paper',
                 '&:hover': {
-                  bgcolor: '#f5f5f5', // Ligero cambio de fondo al pasar el mouse
+                  bgcolor: '#f5f5f5',
                   borderColor: '#bdbdbd',
                 },
-                ml: 'auto', // Asegura que se alinee a la derecha si no hay otros botones
+                ml: 'auto',
               }}
             >
               Cerrar Sesión
@@ -226,7 +298,7 @@ function Home() {
             elevation={0}
             sx={{
               bgcolor: 'transparent',
-              flexGrow: 1, // Esto hace que el acordeón ocupe el espacio restante
+              flexGrow: 1,
               overflowY: 'auto',
               '&.Mui-expanded': {
                 margin: 0,
@@ -234,6 +306,7 @@ function Home() {
               '&::before': {
                 display: 'none',
               },
+              pb: '100px',
             }}
           >
             <AccordionSummary
@@ -296,7 +369,7 @@ function Home() {
           </Accordion>
           {/* FIN ACORDEÓN DE PROYECTOS */}
 
-          {/* Logo al final de la columna - AJUSTE DE POSICIÓN */}
+          {/* Logo al final de la columna - Posición ajustada */}
           <Box sx={{ textAlign: 'center', mt: 4, flexShrink: 0 }}>
             <img
               src={tecemLogo}
@@ -329,11 +402,19 @@ function Home() {
               Interacción con el Agente
             </Typography>
 
-            <Tabs value={activeTab} onChange={handleChangeTab} indicatorColor="primary" textColor="primary"
-                  sx={{ mb: 2, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
-              <Tab label="Entrevistador" />
-              <Tab label="Evaluador" />
-            </Tabs>
+            {/* Pestañas de Agente (Condicional según rol) */}
+            {showInterviewerAgent && (
+              <Tabs value={0} onChange={() => {}} indicatorColor="primary" textColor="primary"
+                    sx={{ mb: 2, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
+                <Tab label="Entrevistador" />
+              </Tabs>
+            )}
+            {showEvaluatorAgent && (
+              <Tabs value={0} onChange={() => {}} indicatorColor="primary" textColor="primary"
+                    sx={{ mb: 2, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
+                <Tab label="Evaluador" />
+              </Tabs>
+            )}
 
             <Box
               sx={{
@@ -412,7 +493,7 @@ function Home() {
             </Box>
           </Paper>
 
-          {/* SEGUNDO BOX DE LA COLUMNA CENTRAL: Información Adicional */}
+          {/* SEGUNDO BOX DE LA COLUMNA CENTRAL: Información Adicional - REESTRUCTURADA */}
           <Paper
             elevation={0}
             sx={{
@@ -428,54 +509,68 @@ function Home() {
               Información Adicional
             </Typography>
 
+            {/* Sub-sección 1: Archivos y Upload */}
+            <Box sx={{ mb: 3, flexGrow: 1 }}>
+              <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
+                Archivos
+              </Typography>
+              <Button
+                  variant="outlined"
+                  startIcon={<UploadFileIcon />}
+                  onClick={handleUploadClick}
+                  sx={{
+                      textTransform: 'none',
+                      borderRadius: '8px',
+                      borderColor: '#e0e0e0',
+                      color: 'text.primary',
+                      '&:hover': {
+                          borderColor: '#bdbdbd',
+                          bgcolor: '#f5f5f5',
+                      },
+                      mb: 2,
+                  }}
+              >
+                  Upload
+              </Button>
+              <Box sx={{ maxHeight: '150px', overflowY: 'auto' }}>
+                {attachedFiles.length > 0 ? (
+                  <List dense disablePadding>
+                    {attachedFiles.map((file) => (
+                      <ListItemButton
+                        key={file.id}
+                        sx={{
+                          borderRadius: '4px',
+                          mb: 0.5,
+                          bgcolor: '#f5f5f5',
+                          '&:hover': { bgcolor: '#ebebeb' },
+                          py: 0.5,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                        }}
+                      >
+                        <DescriptionIcon sx={{ color: 'text.secondary', flexShrink: 0 }} />
+                        <ListItemText primary={file.name} sx={{ flexGrow: 1 }} />
+                      </ListItemButton>
+                    ))}
+                  </List>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    No se han adjuntado archivos.
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+
+            {/* Sub-sección 2: Acciones (Exportar y Simular) */}
             <Box sx={{
                 display: 'flex',
                 alignItems: 'center',
                 flexWrap: 'wrap',
                 gap: 2,
-                mb: 2,
-                flexShrink: 0,
+                pt: 2,
+                borderTop: '1px solid #eee',
             }}>
-                <Button
-                    variant="outlined"
-                    startIcon={<UploadFileIcon />}
-                    onClick={handleUploadClick}
-                    sx={{
-                        textTransform: 'none',
-                        borderRadius: '8px',
-                        borderColor: '#e0e0e0',
-                        color: 'text.primary',
-                        '&:hover': {
-                            borderColor: '#bdbdbd',
-                            bgcolor: '#f5f5f5',
-                        },
-                        flexShrink: 0
-                    }}
-                >
-                    Upload
-                </Button>
-
-                {generatedOutputFile ? (
-                    <Box sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        p: 1,
-                        borderRadius: '4px',
-                        bgcolor: '#f0f0f0',
-                        flexShrink: 0,
-                        minWidth: 'fit-content',
-                    }}>
-                        <DescriptionIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                        <Typography variant="body2" sx={{ flexGrow: 1 }}>
-                            {generatedOutputFile}
-                        </Typography>
-                    </Box>
-                ) : (
-                    <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1 }}>
-                        No se ha generado ningún archivo de salida.
-                    </Typography>
-                )}
-
                 <Button
                     variant="outlined"
                     startIcon={<DownloadIcon />}
@@ -489,7 +584,7 @@ function Home() {
                             borderColor: '#bdbdbd',
                             bgcolor: '#f5f5f5',
                         },
-                        flexShrink: 0
+                        flexGrow: 1,
                     }}
                 >
                     Exportar
@@ -534,44 +629,82 @@ function Home() {
             }}
           >
             <Typography variant="h6" fontWeight="bold" gutterBottom>
-              Mapa de Calor de Riesgos
+              Análisis de Riesgo
             </Typography>
             <Box
               sx={{
-                flexGrow: 1,
-                bgcolor: '#e0e0e0',
-                borderRadius: '8px',
+                width: '100%',
                 display: 'flex',
-                alignItems: 'center',
                 justifyContent: 'center',
+                alignItems: 'center',
                 mb: 3,
-                minHeight: '200px',
-                color: 'text.secondary',
-                fontSize: '1.2rem',
-                textAlign: 'center',
               }}
             >
-              [Gráfico Hotspot Aquí]
+              <svg width={svgWidth} height={svgHeight} viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
+                {/* Círculos de fondo para simular un radar */}
+                <circle cx={svgCenterX} cy={svgCenterY} r={maxRadius * 0.4} stroke="#ccc" fill="none" />
+                <circle cx={svgCenterX} cy={svgCenterY} r={maxRadius * 0.7} stroke="#ccc" fill="none" />
+                <circle cx={svgCenterX} cy={svgCenterY} r={maxRadius} stroke="#ccc" fill="none" />
+
+                {/* Líneas desde el centro a los vértices (ejes) */}
+                {Array.from({ length: numPoints }).map((_, i) => {
+                  const angle = i * angleIncrement - Math.PI / 2;
+                  const x = svgCenterX + maxRadius * Math.cos(angle);
+                  const y = svgCenterY + maxRadius * Math.sin(angle);
+                  return (
+                    <line
+                      key={`line-${i}`}
+                      x1={svgCenterX}
+                      y1={svgCenterY}
+                      x2={x}
+                      y2={y}
+                      stroke="#ccc"
+                    />
+                  );
+                })}
+
+                {/* Polígono de riesgo - AHORA CON VALORES ESTÁTICOS */}
+                <polygon
+                  points={polygonPoints}
+                  fill={polygonColor}
+                  fillOpacity="0.7"
+                  stroke={polygonColor}
+                  strokeWidth="2"
+                />
+
+                {/* Texto central para el valor de riesgo */}
+                <text
+                  x={svgCenterX}
+                  y={svgCenterY + 5}
+                  textAnchor="middle"
+                  fill="white"
+                  fontSize="12"
+                  fontWeight="bold"
+                >
+                  Riesgo: {averageRisk.toFixed(0)}%
+                </text>
+              </svg>
             </Box>
+            {/* Deslizadores - Ahora solo sirven para perfilar la pregunta, no para el gráfico */}
             <Typography variant="subtitle1" gutterBottom>
-              Configuración Hotspot 1
+              Probabilidad
             </Typography>
             <Slider
-              value={sliderValue1}
-              onChange={(_event, newValue) => setSliderValue1(newValue)}
-              aria-labelledby="input-slider-1"
+              value={probabilitySliderValue} // Usar el estado del slider
+              onChange={handleProbabilitySliderChange} // Actualizar el estado del slider
+              aria-labelledby="input-slider-probabilidad"
               valueLabelDisplay="auto"
               min={0}
               max={100}
               sx={{ mb: 3 }}
             />
             <Typography variant="subtitle1" gutterBottom>
-              Configuración Hotspot 2
+              Impacto
             </Typography>
             <Slider
-              value={sliderValue2}
-              onChange={(_event, newValue) => setSliderValue2(newValue)}
-              aria-labelledby="input-slider-2"
+              value={impactSliderValue} // Usar el estado del slider
+              onChange={handleImpactSliderChange} // Actualizar el estado del slider
+              aria-labelledby="input-slider-impacto"
               valueLabelDisplay="auto"
               min={0}
               max={100}
