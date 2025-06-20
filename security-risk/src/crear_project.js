@@ -26,7 +26,7 @@ import securityIcon from './assets/security-icon.png';
 function CrearProject() {
   const navigate = useNavigate();
   const theme = useTheme();
-  // const isMobile = useMediaQuery(theme.breakpoints.down('sm')); // <<-- Eliminada: no se usa
+  // const isMobile = useMediaQuery(theme.breakpoints.down('sm')); // Eliminada: no se usa
 
   const [projectName, setProjectName] = useState('Nombre del Proyecto');
   const [isEditingProjectName, setIsEditingProjectName] = useState(false);
@@ -74,7 +74,7 @@ function CrearProject() {
       flexDirection: 'column',
       minHeight: '100vh',
       bgcolor: '#F0F2F5',
-      p: '20px', // Aplicado padding al contenedor principal para consistencia
+      p: '20px',
     }}>
       {/* AppBar CONSISTENTE CON HOME.JS */}
       <AppBar
@@ -109,7 +109,7 @@ function CrearProject() {
               bgcolor: '#1976d2',
               '&:hover': {
                 bgcolor: '#1565c0',
-              }
+              },
             }}
           >
             Volver
@@ -127,7 +127,6 @@ function CrearProject() {
             md: '65% 1fr',
           },
           gap: '20px',
-          // p: '20px', // Eliminado de aquí, ahora lo gestiona el Box padre
         }}
       >
         {/* Columna Izquierda: Detalles del Proyecto */}
@@ -274,7 +273,7 @@ function CrearProject() {
                       py: 1,
                     }}
                   >
-                    <DescriptionIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                    <DescriptionIcon sx={{ color: 'text.secondary' }} />
                     <ListItemText primary={file.name} />
                   </ListItemButton>
                 ))}
@@ -291,4 +290,4 @@ function CrearProject() {
   );
 }
 
-export default CrearProject;
+export default CrearProject; // <<-- Correcto: exporta CrearProject

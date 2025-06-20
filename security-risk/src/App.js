@@ -5,7 +5,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 // Importa tus componentes de página
 import Login from './Login';
 import CrearProject from './crear_project';
-import Home from './Home'; // <<-- Solo importamos el Home unificado
+import Home from './Home';
 import ProjectAnalysis from './ProjectAnalysis';
 
 function App() {
@@ -21,11 +21,11 @@ function App() {
         {/* Ruta para la página de Análisis de Proyecto */}
         <Route path="/project-analysis" element={<ProjectAnalysis />} />
 
-        {/* Ruta para la página principal (Home) */}
+        {/* Ruta para la página principal (Home), que contiene el chat y proyectos */}
         <Route path="/" element={<Home />} />
       </Routes>
     </Router>
   );
 }
 
-export default App;
+export default App; // <<-- Correcto: exporta App

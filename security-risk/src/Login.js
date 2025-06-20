@@ -6,35 +6,33 @@ import {
   TextField,
   Button,
   Paper,
-  Alert, // Para mostrar mensajes de error/éxito
+  Alert,
 } from '@mui/material';
 import tecemLogo from './assets/tecem-logo.png';
-import { useNavigate, useLocation } from 'react-router-dom'; // Importar useNavigate
+import { useNavigate, useLocation } from 'react-router-dom';
 
 function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(''); // Estado para mensajes de error
-  const navigate = useNavigate(); // Hook para la navegación
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
     console.log("Ruta actual en Login.js:", location.pathname);
-    // Opcional: limpiar cualquier token/rol si el usuario llega aquí sin estar logueado
-    localStorage.removeItem('userRole');
+    localStorage.removeItem('userRole'); // Limpia cualquier rol al llegar a la página de login
   }, [location]);
 
   const handleLogin = (event) => {
     event.preventDefault();
-    setError(''); // Limpiar errores anteriores
+    setError('');
 
-    // Simulación de autenticación
     if (username === 'standard' && password === 'pass') {
-      localStorage.setItem('userRole', 'standard'); // Almacenar el rol
-      navigate('/'); // Redirigir al Home
+      localStorage.setItem('userRole', 'standard');
+      navigate('/');
     } else if (username === 'professional' && password === 'pass') {
-      localStorage.setItem('userRole', 'professional'); // Almacenar el rol
-      navigate('/'); // Redirigir al Home
+      localStorage.setItem('userRole', 'professional');
+      navigate('/');
     } else {
       setError('Usuario o contraseña incorrectos.');
     }
@@ -80,7 +78,7 @@ function Login() {
           Iniciar Sesión
         </Typography>
 
-        {error && ( // Mostrar el mensaje de error si existe
+        {error && (
           <Alert severity="error" sx={{ mb: 2, width: '100%' }}>
             {error}
           </Alert>
@@ -130,4 +128,4 @@ function Login() {
   );
 }
 
-export default Login;
+export default Login; // <<-- Correcto: exporta Login

@@ -10,16 +10,16 @@ import {
   ListItemButton,
   ListItemText,
   Paper,
-  LinearProgress,
+  // LinearProgress, // Eliminado: ya no se usa
   TextField,
   Avatar,
-  useMediaQuery,
+  // useMediaQuery, // Eliminado: ya no se usa
   useTheme,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SaveIcon from '@mui/icons-material/Save';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
-// import SecurityIcon from '@mui/icons-material/Security'; // <<-- Ya no necesario
+// import SecurityIcon from '@mui/icons-material/Security'; // Eliminado: ya no se usa
 import { Send as SendIcon } from '@mui/icons-material';
 
 import { useNavigate } from 'react-router-dom';
@@ -67,22 +67,18 @@ const simulationData = [
 ];
 
 const getRiskLevel = (riskPercentage) => {
-  if (riskPercentage <= 25) return { color: '#4CAF50', text: 'Riesgo Bajo' }; // Verde
-  if (riskPercentage <= 50) return { color: '#FFEB3B', text: 'Riesgo Bajo-Medio' }; // Amarillo
-  if (riskPercentage <= 75) return { color: '#FF9800', text: 'Riesgo Medio-Alto' }; // Naranja
-  return { color: '#F44336', text: 'Riesgo Alto' }; // Rojo
+  if (riskPercentage <= 25) return { color: '#4CAF50', text: 'Riesgo Bajo' };
+  if (riskPercentage <= 50) return { color: '#FFEB3B', text: 'Riesgo Bajo-Medio' };
+  if (riskPercentage <= 75) return { color: '#FF9800', text: 'Riesgo Medio-Alto' };
+  return { color: '#F44336', text: 'Riesgo Alto' };
 };
 
 function ProjectAnalysis() {
   const navigate = useNavigate();
   const theme = useTheme();
-  // const isDesktop = useMediaQuery(theme.breakpoints.up('md')); // isDesktop ya no se usa aquí
 
   const [projectName] = useState('Auditoría de Seguridad de Red');
   const [activeSimulation, setActiveSimulation] = useState(simulationData[0]);
-
-  // <<-- Eliminado: Estado para controlar la visibilidad de la barra de seguridad general -->>
-  // const [showOverallSecurityBar, setShowOverallSecurityBar] = useState(false);
 
   const [messages, setMessages] = useState([
     { id: 1, type: 'agent', text: '¡Hola de nuevo! ¿En qué puedo ayudarte con el análisis de esta auditoría?' },
@@ -90,14 +86,14 @@ function ProjectAnalysis() {
   ]);
   const [chatInput, setChatInput] = useState('');
 
-  const calculateAverageRisk = () => {
-    if (activeSimulation.charts.length === 0) return 0;
-    const totalRisk = activeSimulation.charts.reduce((sum, chart) => sum + chart.risk, 0);
-    return totalRisk / activeSimulation.charts.length;
-  };
-
-  const averageRisk = calculateAverageRisk();
-  const { color: securityBarColor, text: securityBarText } = getRiskLevel(averageRisk);
+  // No se usan estas variables después de eliminar la barra de seguridad
+  // const calculateAverageRisk = () => {
+  //   if (activeSimulation.charts.length === 0) return 0;
+  //   const totalRisk = activeSimulation.charts.reduce((sum, chart) => sum + chart.risk, 0);
+  //   return totalRisk / activeSimulation.charts.length;
+  // };
+  // const averageRisk = calculateAverageRisk();
+  // const { color: securityBarColor, text: securityBarText } = getRiskLevel(averageRisk);
 
   const handleSaveAnalysis = () => {
     alert('Simulando guardar la versión del análisis...');
@@ -115,8 +111,7 @@ function ProjectAnalysis() {
   };
 
   useEffect(() => {
-    // Si necesitas que el chat cambie con la simulación activa, puedes añadir lógica aquí.
-    // Por ahora, el chat se mantiene independiente de la simulación para iteraciones.
+    // La dependencia activeSimulation es suficiente si solo el chat cambia con la simulación
   }, [activeSimulation]);
 
   return (
@@ -203,7 +198,6 @@ function ProjectAnalysis() {
             >
               Exportar PDF
             </Button>
-            {/* <<-- ELIMINADO: Botón para mostrar/ocultar la barra de seguridad -->> */}
           </Box>
         </Toolbar>
       </AppBar>
@@ -321,8 +315,8 @@ function ProjectAnalysis() {
                       borderColor: message.type === 'user' ? '#1976d2' : '#e0e0e0',
                       borderBottomLeftRadius: message.type === 'user' ? '12px' : '0px',
                       borderBottomRightRadius: message.type === 'user' ? '0px' : '12px',
-                    }}
-                  >
+                  }}
+                >
                     <Typography variant="body2">
                       {message.text}
                     </Typography>
@@ -415,8 +409,6 @@ function ProjectAnalysis() {
                 ))}
               </Box>
             </Box>
-
-            {/* <<-- ELIMINADO: Barra de seguridad general -->> */}
           </Paper>
         </Box>
 
@@ -470,11 +462,10 @@ function ProjectAnalysis() {
           >
             Exportar PDF
           </Button>
-          {/* <<-- ELIMINADO: Botón para mostrar/ocultar la barra de seguridad -->> */}
         </Paper>
       </Box>
     </Box>
   );
 }
 
-export default ProjectAnalysis;
+export default ProjectAnalysis; // <<-- Correcto: exporta ProjectAnalysis

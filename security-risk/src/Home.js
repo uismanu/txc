@@ -17,7 +17,7 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Slider,
+  Slider, // Necesario para los sliders en Home (si se reintroducen)
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -35,7 +35,6 @@ import { useNavigate } from 'react-router-dom';
 import securityIcon from './assets/security-icon.png';
 import tecemLogo from './assets/tecem-logo.png';
 
-// La función getRiskColor se mantendrá pero sus inputs ya no serán los valores en tiempo real de los sliders para el gráfico
 const getRiskColor = (probability, impact) => {
   const combinedRiskForHue = (probability + impact) / 2;
   const hue = (100 - combinedRiskForHue) * 1.2;
@@ -61,7 +60,7 @@ function Home() {
 
   const showCreateProjectButton = userRole === 'professional';
   const showSavedProjects = userRole === 'professional';
-  const showHotspotColumn = userRole === 'professional';
+  const showHotspotColumn = userRole === 'professional'; // <<-- RE-ACTIVADA esta variable
   const enableAddSimulationButton = userRole === 'professional';
 
   const showInterviewerAgent = userRole === 'standard';
@@ -93,11 +92,20 @@ function Home() {
     { id: 2, name: 'imagen_de_red.png' },
   ]);
 
-  // Los estados de los sliders se mantienen, pero ya no afectarán el SVG del gráfico
-  const [probabilitySliderValue, setProbabilitySliderValue] = useState(50); // Renombrado para claridad
-  const [impactSliderValue, setImpactSliderValue] = useState(50);         // Renombrado para claridad
+  // Mantener los estados de los sliders para perfilar la pregunta, aunque no controlen el gráfico
+  const [probabilitySliderValue, setProbabilitySliderValue] = useState(50);
+  const [impactSliderValue, setImpactSliderValue] = useState(50);
 
   const [projectsExpanded, setProjectsExpanded] = useState(isDesktop);
+
+  // Variables para el SVG (ahora vuelven a ser necesarias si se muestra la columna)
+  const svgWidth = 220;
+  const svgHeight = 220;
+  const svgCenterX = svgWidth / 2;
+  const svgCenterY = svgHeight / 2;
+  const baseRadius = 20;
+  const maxRadiusIncrease = 70;
+  const maxRadius = baseRadius + maxRadiusIncrease; // Definido correctamente
 
   const handleProjectsAccordionChange = (event, newExpanded) => {
     if (isDesktop) {
@@ -110,14 +118,7 @@ function Home() {
   const handleSendMessage = () => {
     if (chatInput.trim() === '') return;
     const newId = messages.length > 0 ? Math.max(...messages.map(m => m.id)) + 1 : 1;
-    let userMessage = { id: newId, type: 'user', text: chatInput.trim() };
-
-    // Opcional: Si quieres simular que los sliders afectan la respuesta del agente
-    // podrías añadir los valores de los sliders al mensaje que envías,
-    // o disparar una lógica diferente según esos valores.
-    // Ejemplo: userMessage.text += ` (Prob: ${probabilitySliderValue}%, Impact: ${impactSliderValue}%)`;
-
-    setMessages([...messages, userMessage]);
+    setMessages([...messages, { id: newId, type: 'user', text: chatInput.trim() }]);
     setChatInput('');
   };
 
@@ -137,15 +138,13 @@ function Home() {
     setAttachedFiles([...attachedFiles, { id: newFileId, name: `archivo_subido_${newFileId}.jpg` }]);
   };
 
-  // Los onChange de los sliders solo actualizarán su propio estado
+  // Manejadores de sliders
   const handleProbabilitySliderChange = (event, newValue) => {
     setProbabilitySliderValue(newValue);
-    // console.log("Probabilidad para perfilar pregunta:", newValue); // Opcional: log para ver el valor
   };
 
   const handleImpactSliderChange = (event, newValue) => {
     setImpactSliderValue(newValue);
-    // console.log("Impacto para perfilar pregunta:", newValue); // Opcional: log para ver el valor
   };
 
   const handleLogout = () => {
@@ -162,20 +161,10 @@ function Home() {
     }
   }, [isDesktop, userRole, interviewerMessages, evaluatorMessages]);
 
-  // **Cálculos para el SVG AHORA SON ESTÁTICOS o usan valores iniciales predefinidos**
-  // Representarán un resultado "típico" o inicial de un análisis.
-  const staticProbabilityForGraph = 60; // Ejemplo: un 60% de probabilidad fija para el gráfico
-  const staticImpactForGraph = 75;       // Ejemplo: un 75% de impacto fijo para el gráfico
+  // Cálculos para el SVG (volverán a ser relevantes si la columna existe)
+  const staticProbabilityForGraph = 60; // Valores fijos para el gráfico
+  const staticImpactForGraph = 75;
 
-  const svgWidth = 220;
-  const svgHeight = 220;
-  const svgCenterX = svgWidth / 2;
-  const svgCenterY = svgHeight / 2;
-  const baseRadius = 20;
-  const maxRadiusIncrease = 70;
-  const maxRadius = baseRadius + maxRadiusIncrease;
-
-  // El radio del polígono ahora depende de 'staticProbabilityForGraph'
   const graphPolygonRadius = baseRadius + (staticProbabilityForGraph / 100) * maxRadiusIncrease;
 
   const points = [];
@@ -190,10 +179,8 @@ function Home() {
   }
   const polygonPoints = points.join(' ');
 
-  // El color del polígono ahora depende de 'staticProbabilityForGraph' y 'staticImpactForGraph'
   const polygonColor = getRiskColor(staticProbabilityForGraph, staticImpactForGraph);
 
-  // El riesgo promedio para el texto central también es estático
   const averageRisk = (staticProbabilityForGraph + staticImpactForGraph) / 2;
 
 
@@ -223,7 +210,7 @@ function Home() {
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {showCreateProjectButton && (
+            {showCreateProjectButton && ( // <<-- Botón "Nuevo Proyecto" condicional
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
@@ -269,10 +256,11 @@ function Home() {
         sx={{
           flexGrow: 1,
           display: 'grid',
+          // <<-- RE-ACTIVADA la lógica de 3 columnas para professional -->>
           gridTemplateColumns: {
             xs: '1fr',
             sm: '1fr',
-            md: showHotspotColumn ? '250px 1fr 250px' : '250px 1fr',
+            md: showHotspotColumn ? '250px 1fr 250px' : '250px 1fr', // 3 columnas si es profesional, 2 si es standard
           },
           gap: '20px',
         }}
@@ -472,8 +460,9 @@ function Home() {
             <Box sx={{ display: 'flex', gap: 1, mt: 'auto', flexShrink: 0 }}>
               <TextField
                 fullWidth
+                margin="normal"
+                label="Escribe tu mensaje..."
                 variant="outlined"
-                placeholder="Escribe tu mensaje..."
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyPress={(e) => {
@@ -481,12 +470,12 @@ function Home() {
                     handleSendMessage();
                   }
                 }}
-                sx={{ '& fieldset': { borderRadius: '8px' } }}
+                sx={{ mb: 0, '& fieldset': { borderRadius: '8px' } }}
               />
               <Button
                 variant="contained"
                 onClick={handleSendMessage}
-                sx={{ borderRadius: '8px', px: 3 }}
+                sx={{ borderRadius: '8px', px: 3, height: '56px' }}
               >
                 <SendIcon />
               </Button>
@@ -615,8 +604,8 @@ function Home() {
           </Paper>
         </Box>
 
-        {/* Tercera columna para gráfico hotspot (solo para profesional) */}
-        {showHotspotColumn && (
+        {/* Tercera columna para gráfico hotspot (solo para professional) */}
+        {showHotspotColumn && ( // <<-- RE-ACTIVADO el renderizado condicional de la tercera columna
           <Paper
             elevation={0}
             sx={{
@@ -640,6 +629,7 @@ function Home() {
                 mb: 3,
               }}
             >
+              {/* SVG para simular el gráfico vectorial dinámico */}
               <svg width={svgWidth} height={svgHeight} viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
                 {/* Círculos de fondo para simular un radar */}
                 <circle cx={svgCenterX} cy={svgCenterY} r={maxRadius * 0.4} stroke="#ccc" fill="none" />
@@ -690,8 +680,8 @@ function Home() {
               Probabilidad
             </Typography>
             <Slider
-              value={probabilitySliderValue} // Usar el estado del slider
-              onChange={handleProbabilitySliderChange} // Actualizar el estado del slider
+              value={probabilitySliderValue}
+              onChange={handleProbabilitySliderChange}
               aria-labelledby="input-slider-probabilidad"
               valueLabelDisplay="auto"
               min={0}
@@ -702,8 +692,8 @@ function Home() {
               Impacto
             </Typography>
             <Slider
-              value={impactSliderValue} // Usar el estado del slider
-              onChange={handleImpactSliderChange} // Actualizar el estado del slider
+              value={impactSliderValue}
+              onChange={handleImpactSliderChange}
               aria-labelledby="input-slider-impacto"
               valueLabelDisplay="auto"
               min={0}
