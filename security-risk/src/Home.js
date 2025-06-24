@@ -17,7 +17,7 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Slider, // Necesario para los sliders en Home (si se reintroducen)
+  // Slider, // <<-- ELIMINADO: 'Slider' ya no se usa
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -34,16 +34,18 @@ import { useNavigate } from 'react-router-dom';
 
 import securityIcon from './assets/security-icon.png';
 import tecemLogo from './assets/tecem-logo.png';
+import matrizDeRiesgoImage from './assets/matriz-de-riesgo1.jpg'; // Importación de la imagen de la matriz de riesgo
 
-const getRiskColor = (probability, impact) => {
-  const combinedRiskForHue = (probability + impact) / 2;
-  const hue = (100 - combinedRiskForHue) * 1.2;
-
-  const saturation = 50 + (impact * 0.5);
-  const lightness = 60 - (impact * 0.2);
-
-  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-};
+// <<-- ELIMINADO: 'getRiskColor' ya no se usa aquí
+// const getRiskColor = (probability, impact) => {
+//   const combinedRiskForHue = (probability + impact) / 2;
+//   const hue = (100 - combinedRiskForHue) * 1.2;
+//
+//   const saturation = 50 + (impact * 0.5);
+//   const lightness = 60 - (impact * 0.2);
+//
+//   return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+// };
 
 function Home() {
   const navigate = useNavigate();
@@ -60,7 +62,7 @@ function Home() {
 
   const showCreateProjectButton = userRole === 'professional';
   const showSavedProjects = userRole === 'professional';
-  const showHotspotColumn = userRole === 'professional'; // <<-- RE-ACTIVADA esta variable
+  const showHotspotColumn = userRole === 'professional';
   const enableAddSimulationButton = userRole === 'professional';
 
   const showInterviewerAgent = userRole === 'standard';
@@ -92,20 +94,39 @@ function Home() {
     { id: 2, name: 'imagen_de_red.png' },
   ]);
 
-  // Mantener los estados de los sliders para perfilar la pregunta, aunque no controlen el gráfico
-  const [probabilitySliderValue, setProbabilitySliderValue] = useState(50);
-  const [impactSliderValue, setImpactSliderValue] = useState(50);
+  // <<-- ELIMINADOS: estados y manejadores de sliders, ya no se usan -->>
+  // const [probabilitySliderValue, setProbabilitySliderValue] = useState(50);
+  // const [impactSliderValue, setImpactSliderValue] = useState(50);
+  // const handleProbabilitySliderChange = (event, newValue) => { setProbabilitySliderValue(newValue); };
+  // const handleImpactSliderChange = (event, newValue) => { setImpactSliderValue(newValue); };
 
   const [projectsExpanded, setProjectsExpanded] = useState(isDesktop);
 
-  // Variables para el SVG (ahora vuelven a ser necesarias si se muestra la columna)
+  // <<-- ELIMINADAS: todas las variables y cálculos relacionados con el SVG -->>
+  /*
   const svgWidth = 220;
   const svgHeight = 220;
   const svgCenterX = svgWidth / 2;
   const svgCenterY = svgHeight / 2;
   const baseRadius = 20;
   const maxRadiusIncrease = 70;
-  const maxRadius = baseRadius + maxRadiusIncrease; // Definido correctamente
+  const maxRadius = baseRadius + maxRadiusIncrease;
+  const staticProbabilityForGraph = 60;
+  const staticImpactForGraph = 75;
+  const graphPolygonRadius = baseRadius + (staticProbabilityForGraph / 100) * maxRadiusIncrease;
+  const points = [];
+  const numPoints = 5;
+  const angleIncrement = (2 * Math.PI) / numPoints;
+  for (let i = 0; i < numPoints; i++) {
+    const angle = i * angleIncrement - Math.PI / 2;
+    const x = svgCenterX + graphPolygonRadius * Math.cos(angle);
+    const y = svgCenterY + graphPolygonRadius * Math.sin(angle);
+    points.push(`${x},${y}`);
+  }
+  const polygonPoints = points.join(' ');
+  const polygonColor = getRiskColor(staticProbabilityForGraph, staticImpactForGraph);
+  const averageRisk = (staticProbabilityForGraph + staticImpactForGraph) / 2;
+  */
 
   const handleProjectsAccordionChange = (event, newExpanded) => {
     if (isDesktop) {
@@ -138,15 +159,6 @@ function Home() {
     setAttachedFiles([...attachedFiles, { id: newFileId, name: `archivo_subido_${newFileId}.jpg` }]);
   };
 
-  // Manejadores de sliders
-  const handleProbabilitySliderChange = (event, newValue) => {
-    setProbabilitySliderValue(newValue);
-  };
-
-  const handleImpactSliderChange = (event, newValue) => {
-    setImpactSliderValue(newValue);
-  };
-
   const handleLogout = () => {
     localStorage.removeItem('userRole');
     navigate('/login');
@@ -160,28 +172,6 @@ function Home() {
       setMessages(evaluatorMessages);
     }
   }, [isDesktop, userRole, interviewerMessages, evaluatorMessages]);
-
-  // Cálculos para el SVG (volverán a ser relevantes si la columna existe)
-  const staticProbabilityForGraph = 60; // Valores fijos para el gráfico
-  const staticImpactForGraph = 75;
-
-  const graphPolygonRadius = baseRadius + (staticProbabilityForGraph / 100) * maxRadiusIncrease;
-
-  const points = [];
-  const numPoints = 5;
-  const angleIncrement = (2 * Math.PI) / numPoints;
-
-  for (let i = 0; i < numPoints; i++) {
-    const angle = i * angleIncrement - Math.PI / 2;
-    const x = svgCenterX + graphPolygonRadius * Math.cos(angle);
-    const y = svgCenterY + graphPolygonRadius * Math.sin(angle);
-    points.push(`${x},${y}`);
-  }
-  const polygonPoints = points.join(' ');
-
-  const polygonColor = getRiskColor(staticProbabilityForGraph, staticImpactForGraph);
-
-  const averageRisk = (staticProbabilityForGraph + staticImpactForGraph) / 2;
 
 
   return (
@@ -210,7 +200,7 @@ function Home() {
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {showCreateProjectButton && ( // <<-- Botón "Nuevo Proyecto" condicional
+            {showCreateProjectButton && (
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
@@ -256,11 +246,10 @@ function Home() {
         sx={{
           flexGrow: 1,
           display: 'grid',
-          // <<-- RE-ACTIVADA la lógica de 3 columnas para professional -->>
           gridTemplateColumns: {
             xs: '1fr',
             sm: '1fr',
-            md: showHotspotColumn ? '250px 1fr 250px' : '250px 1fr', // 3 columnas si es profesional, 2 si es standard
+            md: showHotspotColumn ? '250px 1fr 250px' : '250px 1fr',
           },
           gap: '20px',
         }}
@@ -604,8 +593,8 @@ function Home() {
           </Paper>
         </Box>
 
-        {/* Tercera columna para gráfico hotspot (solo para professional) */}
-        {showHotspotColumn && ( // <<-- RE-ACTIVADO el renderizado condicional de la tercera columna
+        {/* Tercera columna para el gráfico de matriz de riesgo (solo para professional) */}
+        {showHotspotColumn && (
           <Paper
             elevation={0}
             sx={{
@@ -618,87 +607,27 @@ function Home() {
             }}
           >
             <Typography variant="h6" fontWeight="bold" gutterBottom>
-              Análisis de Riesgo
+              Matriz de Riesgo
             </Typography>
             <Box
               sx={{
                 width: '100%',
                 display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                mb: 3,
+                overflow: 'hidden',
+                mb: 2,
               }}
             >
-              {/* SVG para simular el gráfico vectorial dinámico */}
-              <svg width={svgWidth} height={svgHeight} viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
-                {/* Círculos de fondo para simular un radar */}
-                <circle cx={svgCenterX} cy={svgCenterY} r={maxRadius * 0.4} stroke="#ccc" fill="none" />
-                <circle cx={svgCenterX} cy={svgCenterY} r={maxRadius * 0.7} stroke="#ccc" fill="none" />
-                <circle cx={svgCenterX} cy={svgCenterY} r={maxRadius} stroke="#ccc" fill="none" />
-
-                {/* Líneas desde el centro a los vértices (ejes) */}
-                {Array.from({ length: numPoints }).map((_, i) => {
-                  const angle = i * angleIncrement - Math.PI / 2;
-                  const x = svgCenterX + maxRadius * Math.cos(angle);
-                  const y = svgCenterY + maxRadius * Math.sin(angle);
-                  return (
-                    <line
-                      key={`line-${i}`}
-                      x1={svgCenterX}
-                      y1={svgCenterY}
-                      x2={x}
-                      y2={y}
-                      stroke="#ccc"
-                    />
-                  );
-                })}
-
-                {/* Polígono de riesgo - AHORA CON VALORES ESTÁTICOS */}
-                <polygon
-                  points={polygonPoints}
-                  fill={polygonColor}
-                  fillOpacity="0.7"
-                  stroke={polygonColor}
-                  strokeWidth="2"
-                />
-
-                {/* Texto central para el valor de riesgo */}
-                <text
-                  x={svgCenterX}
-                  y={svgCenterY + 5}
-                  textAnchor="middle"
-                  fill="white"
-                  fontSize="12"
-                  fontWeight="bold"
-                >
-                  Riesgo: {averageRisk.toFixed(0)}%
-                </text>
-              </svg>
+              <img
+                src={matrizDeRiesgoImage}
+                alt="Matriz de Riesgo"
+                style={{
+                  width: '100%',
+                  height: 'auto',
+                  objectFit: 'contain',
+                  display: 'block',
+                }}
+              />
             </Box>
-            {/* Deslizadores - Ahora solo sirven para perfilar la pregunta, no para el gráfico */}
-            <Typography variant="subtitle1" gutterBottom>
-              Probabilidad
-            </Typography>
-            <Slider
-              value={probabilitySliderValue}
-              onChange={handleProbabilitySliderChange}
-              aria-labelledby="input-slider-probabilidad"
-              valueLabelDisplay="auto"
-              min={0}
-              max={100}
-              sx={{ mb: 3 }}
-            />
-            <Typography variant="subtitle1" gutterBottom>
-              Impacto
-            </Typography>
-            <Slider
-              value={impactSliderValue}
-              onChange={handleImpactSliderChange}
-              aria-labelledby="input-slider-impacto"
-              valueLabelDisplay="auto"
-              min={0}
-              max={100}
-            />
           </Paper>
         )}
       </Box>
