@@ -17,7 +17,6 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  // Slider, // <<-- ELIMINADO: 'Slider' ya no se usa
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -34,39 +33,31 @@ import { useNavigate } from 'react-router-dom';
 
 import securityIcon from './assets/security-icon.png';
 import tecemLogo from './assets/tecem-logo.png';
-import matrizDeRiesgoImage from './assets/matriz-de-riesgo1.jpg'; // Importación de la imagen de la matriz de riesgo
-
-// <<-- ELIMINADO: 'getRiskColor' ya no se usa aquí
-// const getRiskColor = (probability, impact) => {
-//   const combinedRiskForHue = (probability + impact) / 2;
-//   const hue = (100 - combinedRiskForHue) * 1.2;
-//
-//   const saturation = 50 + (impact * 0.5);
-//   const lightness = 60 - (impact * 0.2);
-//
-//   return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-// };
+import matrizDeRiesgoImage from './assets/matriz-de-riesgo1.jpg';
 
 function Home() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
+  const [userToken] = useState(localStorage.getItem('userToken')); // Definido aquí
   const [userRole] = useState(localStorage.getItem('userRole') || 'guest');
 
   useEffect(() => {
-    if (!localStorage.getItem('userRole')) {
+    if (!userToken) {
       navigate('/login');
     }
-  }, [navigate]);
+  }, [navigate, userToken]);
+  
+  const isProfessionalOrConsultant = userRole === 'professional' || userRole === 'consultant';
 
-  const showCreateProjectButton = userRole === 'professional';
-  const showSavedProjects = userRole === 'professional';
-  const showHotspotColumn = userRole === 'professional';
-  const enableAddSimulationButton = userRole === 'professional';
+  const showCreateProjectButton = isProfessionalOrConsultant;
+  const showSavedProjects = isProfessionalOrConsultant;
+  const showHotspotColumn = isProfessionalOrConsultant;
+  const enableAddSimulationButton = isProfessionalOrConsultant; // Asumo que "consultor" también puede agregar simulación
 
   const showInterviewerAgent = userRole === 'standard';
-  const showEvaluatorAgent = userRole === 'professional';
+  const showEvaluatorAgent = isProfessionalOrConsultant; // Agente Evaluador para profesional/consultor
 
   const projects = showSavedProjects ? [
     'Auditoría de Seguridad de Red',
@@ -94,39 +85,7 @@ function Home() {
     { id: 2, name: 'imagen_de_red.png' },
   ]);
 
-  // <<-- ELIMINADOS: estados y manejadores de sliders, ya no se usan -->>
-  // const [probabilitySliderValue, setProbabilitySliderValue] = useState(50);
-  // const [impactSliderValue, setImpactSliderValue] = useState(50);
-  // const handleProbabilitySliderChange = (event, newValue) => { setProbabilitySliderValue(newValue); };
-  // const handleImpactSliderChange = (event, newValue) => { setImpactSliderValue(newValue); };
-
   const [projectsExpanded, setProjectsExpanded] = useState(isDesktop);
-
-  // <<-- ELIMINADAS: todas las variables y cálculos relacionados con el SVG -->>
-  /*
-  const svgWidth = 220;
-  const svgHeight = 220;
-  const svgCenterX = svgWidth / 2;
-  const svgCenterY = svgHeight / 2;
-  const baseRadius = 20;
-  const maxRadiusIncrease = 70;
-  const maxRadius = baseRadius + maxRadiusIncrease;
-  const staticProbabilityForGraph = 60;
-  const staticImpactForGraph = 75;
-  const graphPolygonRadius = baseRadius + (staticProbabilityForGraph / 100) * maxRadiusIncrease;
-  const points = [];
-  const numPoints = 5;
-  const angleIncrement = (2 * Math.PI) / numPoints;
-  for (let i = 0; i < numPoints; i++) {
-    const angle = i * angleIncrement - Math.PI / 2;
-    const x = svgCenterX + graphPolygonRadius * Math.cos(angle);
-    const y = svgCenterY + graphPolygonRadius * Math.sin(angle);
-    points.push(`${x},${y}`);
-  }
-  const polygonPoints = points.join(' ');
-  const polygonColor = getRiskColor(staticProbabilityForGraph, staticImpactForGraph);
-  const averageRisk = (staticProbabilityForGraph + staticImpactForGraph) / 2;
-  */
 
   const handleProjectsAccordionChange = (event, newExpanded) => {
     if (isDesktop) {
@@ -136,11 +95,56 @@ function Home() {
     }
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (chatInput.trim() === '') return;
+
+    const userMessageText = chatInput.trim();
     const newId = messages.length > 0 ? Math.max(...messages.map(m => m.id)) + 1 : 1;
-    setMessages([...messages, { id: newId, type: 'user', text: chatInput.trim() }]);
+
+    setMessages(prevMessages => [...prevMessages, { id: newId, type: 'user', text: userMessageText }]);
     setChatInput('');
+
+    const BACKEND_API_URL = process.env.REACT_APP_BACKEND_API_URL;
+    const AGENT_CHAT_ENDPOINT = `${BACKEND_API_URL}/agent/chat`;
+
+    // <<-- CORRECCIÓN: Volver a leer userToken de localStorage justo antes de usarlo -->>
+    // Esto es un workaround para el linter si tiene problemas con la referencia al estado en este contexto
+    const currentToken = localStorage.getItem('userToken'); 
+
+    if (!currentToken) {
+        console.error("Error: userToken no encontrado en localStorage al enviar mensaje.");
+        setMessages(prevMessages => [...prevMessages, { id: newId + 1, type: 'agent', text: `Error: No autenticado. Por favor, inicia sesión de nuevo.` }]);
+        navigate('/login'); // Redirigir a login si no hay token
+        return;
+    }
+
+    try {
+      const response = await fetch(AGENT_CHAT_ENDPOINT, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentToken}`, // <<-- USAR currentToken
+        },
+        body: JSON.stringify({
+          idagente: "0",
+          msg: userMessageText,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: response.statusText }));
+        throw new Error(`Error del servidor: ${response.status} - ${errorData.message || 'Error desconocido'}`);
+      }
+
+      const data = await response.json();
+      const agentResponseText = data.response || "El agente no devolvió una respuesta.";
+
+      setMessages(prevMessages => [...prevMessages, { id: newId + 1, type: 'agent', text: agentResponseText }]);
+
+    } catch (error) {
+      console.error("Error al comunicarse con el backend del agente:", error);
+      setMessages(prevMessages => [...prevMessages, { id: newId + 1, type: 'agent', text: `Error: No se pudo conectar con el agente. (${error.message})` }]);
+    }
   };
 
   const handleExportData = () => {
@@ -149,17 +153,18 @@ function Home() {
 
   const handleAddSimulation = () => {
     alert('Simulando la adición de una simulación...');
-    const newFileId = attachedFiles.length > 0 ? Math.max(...attachedFiles.map(f => f.id)) + 1 : 1;
-    setAttachedFiles([...attachedFiles, { id: newFileId, name: `simulacion_generada_${newFileId}.xlsx` }]);
+    const newId = attachedFiles.length > 0 ? Math.max(...attachedFiles.map(m => m.id)) + 1 : 1;
+    setAttachedFiles(prevFiles => [...prevFiles, { id: newId, name: `simulacion_generada_${newId}.xlsx` }]);
   };
 
   const handleUploadClick = () => {
     alert('Simulando la carga de un archivo...');
-    const newFileId = attachedFiles.length > 0 ? Math.max(...attachedFiles.map(f => f.id)) + 1 : 1;
-    setAttachedFiles([...attachedFiles, { id: newFileId, name: `archivo_subido_${newFileId}.jpg` }]);
+    const newId = attachedFiles.length > 0 ? Math.max(...attachedFiles.map(m => m.id)) + 1 : 1;
+    setAttachedFiles(prevFiles => [...prevFiles, { id: newId, name: `archivo_subido_${newId}.jpg` }]);
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('userToken');
     localStorage.removeItem('userRole');
     navigate('/login');
   };
@@ -172,7 +177,6 @@ function Home() {
       setMessages(evaluatorMessages);
     }
   }, [isDesktop, userRole, interviewerMessages, evaluatorMessages]);
-
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', p: '20px', bgcolor: '#F0F2F5' }}>
@@ -527,7 +531,7 @@ function Home() {
                           gap: 1,
                         }}
                       >
-                        <DescriptionIcon sx={{ color: 'text.secondary', flexShrink: 0 }} />
+                        <DescriptionIcon sx={{ color: 'text.secondary' }} />
                         <ListItemText primary={file.name} sx={{ flexGrow: 1 }} />
                       </ListItemButton>
                     ))}

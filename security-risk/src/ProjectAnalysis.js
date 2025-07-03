@@ -27,7 +27,7 @@ import { useNavigate } from 'react-router-dom';
 import securityIcon from './assets/security-icon.png';
 import grafDemo2 from './assets/graf-demo2.jpg';
 import grafDemo3 from './assets/graf-demo3.jpg';
-import grafDemo4 from './assets/graf-demo4.jpg';
+import grafDemo4 from './assets/graf-demo4.jpg'; // <<-- CORREGIDO: graf-demo4.jpg
 import grafDemo5 from './assets/graf-demo5.jpg';
 
 // Datos de demostración para las simulaciones
@@ -86,15 +86,6 @@ function ProjectAnalysis() {
   ]);
   const [chatInput, setChatInput] = useState('');
 
-  // No se usan estas variables después de eliminar la barra de seguridad
-  // const calculateAverageRisk = () => {
-  //   if (activeSimulation.charts.length === 0) return 0;
-  //   const totalRisk = activeSimulation.charts.reduce((sum, chart) => sum + chart.risk, 0);
-  //   return totalRisk / activeSimulation.charts.length;
-  // };
-  // const averageRisk = calculateAverageRisk();
-  // const { color: securityBarColor, text: securityBarText } = getRiskLevel(averageRisk);
-
   const handleSaveAnalysis = () => {
     alert('Simulando guardar la versión del análisis...');
   };
@@ -103,15 +94,60 @@ function ProjectAnalysis() {
     alert('Simulando la exportación de un PDF con los gráficos...');
   };
 
-  const handleSendMessage = () => {
+  // <<-- CAMBIO CLAVE AQUÍ: handleSendMessage ahora hace la llamada al backend -->>
+  const handleSendMessage = async () => {
     if (chatInput.trim() === '') return;
+
+    const userMessageText = chatInput.trim();
     const newId = messages.length > 0 ? Math.max(...messages.map(m => m.id)) + 1 : 1;
-    setMessages([...messages, { id: newId, type: 'user', text: chatInput.trim() }]);
-    setChatInput('');
+
+    // Añadir el mensaje del usuario inmediatamente a la UI
+    setMessages(prevMessages => [...prevMessages, { id: newId, type: 'user', text: userMessageText }]);
+    setChatInput(''); // Limpiar el input
+
+    // URL del backend desde las variables de entorno
+    // Asumiendo que REACT_APP_BACKEND_API_URL está definida en .env.development y .env.production
+    const BACKEND_API_URL = process.env.REACT_APP_BACKEND_API_URL;
+    const AGENT_CHAT_ENDPOINT = `${BACKEND_API_URL}/agent/chat`; // Endpoint específico para el chat
+
+    try {
+      const response = await fetch(AGENT_CHAT_ENDPOINT, {
+        method: 'PUT', // Método HTTP PUT según la especificación del backend
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          idagente: "0", // Usamos ID de agente fijo "0" como en Home.js
+          msg: userMessageText,
+        }),
+      });
+
+      if (!response.ok) {
+        // Si la respuesta no es 2xx, lanzar un error
+        // Intentar parsear el error del servidor si lo hay
+        const errorData = await response.json().catch(() => ({ message: response.statusText }));
+        throw new Error(`Error del servidor: ${response.status} - ${errorData.message || 'Error desconocido'}`);
+      }
+
+      const data = await response.json();
+      // Asumiendo que la respuesta del agente viene en un campo 'response'
+      const agentResponseText = data.response || "El agente no devolvió una respuesta.";
+
+      // Añadir la respuesta del agente a la UI
+      setMessages(prevMessages => [...prevMessages, { id: newId + 1, type: 'agent', text: agentResponseText }]);
+
+    } catch (error) {
+      console.error("Error al comunicarse con el backend del agente:", error);
+      // Mostrar un mensaje de error en el chat para el usuario
+      setMessages(prevMessages => [...prevMessages, { id: newId + 1, type: 'agent', text: `Error: No se pudo conectar con el agente. (${error.message})` }]);
+    }
   };
 
   useEffect(() => {
     // La dependencia activeSimulation es suficiente si solo el chat cambia con la simulación
+    // Si quisieras que el chat se resetee o cambie de mensajes iniciales al cambiar de simulación,
+    // aquí podrías añadir lógica similar a Home.js
+    // Por ejemplo: setMessages([{ id: 1, type: 'agent', text: `Iniciando chat para ${activeSimulation.name}` }]);
   }, [activeSimulation]);
 
   return (
@@ -468,4 +504,4 @@ function ProjectAnalysis() {
   );
 }
 
-export default ProjectAnalysis; // <<-- Correcto: exporta ProjectAnalysis
+export default ProjectAnalysis;

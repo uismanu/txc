@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["http://localhost:3000", "https://tecem-frontend-dev-812749937338.us-west4.run.app"],
+    "method": ["PUT", "GET"],
+    "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
+    "maxAgeSeconds": 3600
+  }
+]
