@@ -1,5 +1,5 @@
 // src/Home.js
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -19,6 +19,9 @@ import {
   AccordionDetails,
   useMediaQuery,
   useTheme,
+  CircularProgress,
+  InputAdornment,
+  IconButton,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { Send as SendIcon } from '@mui/icons-material';
@@ -27,9 +30,10 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import CloseIcon from '@mui/icons-material/Close';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom'; // <<-- Importar useLocation
 
 import securityIcon from './assets/security-icon.png';
 import tecemLogo from './assets/tecem-logo.png';
@@ -37,27 +41,96 @@ import matrizDeRiesgoImage from './assets/matriz-de-riesgo1.jpg';
 
 function Home() {
   const navigate = useNavigate();
+  const location = useLocation(); // <<-- Usar useLocation para detectar cambios de ruta/estado
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
-  const [userToken] = useState(localStorage.getItem('userToken')); // Definido aquí
-  const [userRole] = useState(localStorage.getItem('userRole') || 'guest');
+  // <<-- CAMBIO CLAVE AQUÍ: userToken y userRole se actualizan en useEffect -->>
+  const [userToken, setUserToken] = useState(localStorage.getItem('userToken'));
+  const [userRole, setUserRole] = useState(localStorage.getItem('userRole') || 'guest');
+
+  // <<-- NUEVOS ESTADOS PARA ADJUNTAR ARCHIVOS -->>
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const fileInputRef = useRef(null);
+
+  // Estado para el feedback de arrastrar y soltar
+  const [isDragOver, setIsDragOver] = useState(false);
+  // <<-- FIN NUEVOS ESTADOS -->>
 
   useEffect(() => {
-    if (!userToken) {
+    // Re-leer el token y el rol de localStorage cada vez que la URL (location) cambia,
+    // o cuando el componente se monta por primera vez.
+    const storedToken = localStorage.getItem('userToken');
+    const storedRole = localStorage.getItem('userRole') || 'guest';
+
+    if (!storedToken) {
       navigate('/login');
+    } else {
+      setUserToken(storedToken); // Asegurar que el estado userToken esté actualizado
+      setUserRole(storedRole);   // Asegurar que el estado userRole esté actualizado
+
+      // Nueva validación del rol con el backend
+      const validateUserRole = async () => {
+        const BACKEND_API_URL = process.env.REACT_APP_BACKEND_API_URL;
+        const PROFILE_ENDPOINT = `${BACKEND_API_URL}/api/user/profile`;
+
+        try {
+          const response = await fetch(PROFILE_ENDPOINT, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${storedToken}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: response.statusText }));
+            throw new Error(`Error al validar el perfil: ${response.status} - ${errorData.message || 'Error desconocido'}`);
+          }
+
+          const data = await response.json();
+          let backendRole = data.role; // Asume que el backend devuelve "role": "3" o similar
+          if (data.rol && data.rol.codrol) {
+            backendRole = data.rol.codrol; // Si el backend devuelve {"rol": {"codrol": "3", "rol": "Consultant"}}
+          }
+
+          const roleMapping = {
+            "1": "standard",
+            "2": "professional",
+            "3": "consultant",
+          };
+
+          const mappedRole = roleMapping[backendRole] || 'guest';
+          if (mappedRole !== storedRole) {
+            localStorage.setItem('userRole', mappedRole);
+            setUserRole(mappedRole);
+          }
+        } catch (error) {
+          console.error('Error al validar el rol con el backend:', error);
+          if (error.message.includes('401') || error.message.includes('403')) {
+            // Token inválido o no autorizado, forzar logout
+            localStorage.removeItem('userToken');
+            localStorage.removeItem('userRole');
+            navigate('/login');
+          }
+        }
+      };
+
+      validateUserRole();
     }
-  }, [navigate, userToken]);
-  
+  }, [navigate, location]); // location como dependencia para re-evaluar al navegar al Home
+
   const isProfessionalOrConsultant = userRole === 'professional' || userRole === 'consultant';
 
   const showCreateProjectButton = isProfessionalOrConsultant;
   const showSavedProjects = isProfessionalOrConsultant;
   const showHotspotColumn = isProfessionalOrConsultant;
-  const enableAddSimulationButton = isProfessionalOrConsultant; // Asumo que "consultor" también puede agregar simulación
+  const enableAddSimulationButton = isProfessionalOrConsultant;
 
   const showInterviewerAgent = userRole === 'standard';
-  const showEvaluatorAgent = isProfessionalOrConsultant; // Agente Evaluador para profesional/consultor
+  const showEvaluatorAgent = isProfessionalOrConsultant;
 
   const projects = showSavedProjects ? [
     'Auditoría de Seguridad de Red',
@@ -95,39 +168,141 @@ function Home() {
     }
   };
 
+  // Función para obtener URL firmada y subir archivo
+  const getSignedUrlAndUploadFile = async (file) => {
+    setIsUploadingFile(true);
+    setUploadError(null);
+    const BACKEND_API_URL = process.env.REACT_APP_BACKEND_API_URL;
+    const GENERATE_UPLOAD_URL_ENDPOINT = `${BACKEND_API_URL}/api/storage/generate-upload-url`;
+
+    const currentToken = localStorage.getItem('userToken');
+    if (!currentToken) {
+        setUploadError("No autenticado. Por favor, inicia sesión de nuevo.");
+        setIsUploadingFile(false);
+        navigate('/login');
+        return null;
+    }
+
+    try {
+      const response = await fetch(GENERATE_UPLOAD_URL_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentToken}`,
+        },
+        body: JSON.stringify({
+          file_name: file.name,
+          content_type: file.type,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: response.statusText }));
+        throw new Error(`Error al obtener URL firmada: ${response.status} - ${errorData.message || 'Error desconocido'}`);
+      }
+
+      const { signedUrl, publicUrl } = await response.json();
+
+      if (!signedUrl || !publicUrl) {
+          throw new Error("El backend no proporcionó URL firmada o pública válida.");
+      }
+
+      const uploadResponse = await fetch(signedUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type,
+        },
+        body: file,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Error al subir el archivo a Cloud Storage: ${uploadResponse.status} - ${uploadResponse.statusText}`);
+      }
+
+      setIsUploadingFile(false);
+      return publicUrl; 
+    } catch (error) {
+      console.error('Error en la subida de archivo:', error);
+      setUploadError(`Error al subir archivo: ${error.message}`);
+      setIsUploadingFile(false);
+      return null;
+    }
+  };
+
   const handleSendMessage = async () => {
-    if (chatInput.trim() === '') return;
+    if (chatInput.trim() === '' && !selectedFile) return;
 
     const userMessageText = chatInput.trim();
     const newId = messages.length > 0 ? Math.max(...messages.map(m => m.id)) + 1 : 1;
-
-    setMessages(prevMessages => [...prevMessages, { id: newId, type: 'user', text: userMessageText }]);
-    setChatInput('');
-
-    const BACKEND_API_URL = process.env.REACT_APP_BACKEND_API_URL;
-    const AGENT_CHAT_ENDPOINT = `${BACKEND_API_URL}/agent/chat`;
-
-    // <<-- CORRECCIÓN: Volver a leer userToken de localStorage justo antes de usarlo -->>
-    // Esto es un workaround para el linter si tiene problemas con la referencia al estado en este contexto
-    const currentToken = localStorage.getItem('userToken'); 
+    const currentToken = localStorage.getItem('userToken');
 
     if (!currentToken) {
         console.error("Error: userToken no encontrado en localStorage al enviar mensaje.");
         setMessages(prevMessages => [...prevMessages, { id: newId + 1, type: 'agent', text: `Error: No autenticado. Por favor, inicia sesión de nuevo.` }]);
-        navigate('/login'); // Redirigir a login si no hay token
+        navigate('/login');
         return;
     }
+
+    let adjuntosData = [];
+    let messageToDisplay = userMessageText;
+    
+    if (selectedFile) {
+        if (isUploadingFile) {
+            alert("Por favor espera a que el archivo termine de subirse.");
+            return;
+        }
+        
+        if (!userMessageText) {
+            messageToDisplay = `Adjuntando archivo: ${selectedFile.name}`;
+        }
+        setMessages(prevMessages => [...prevMessages, { 
+            id: newId, 
+            type: 'user', 
+            text: messageToDisplay,
+            file: { name: selectedFile.name, status: 'pending' }
+        }]);
+        setChatInput('');
+
+        const publicUrl = await getSignedUrlAndUploadFile(selectedFile);
+        
+        if (!publicUrl) {
+            setMessages(prevMessages => prevMessages.map(msg => 
+                msg.id === newId ? { ...msg, file: { ...msg.file, status: 'failed' }, text: `Error al adjuntar ${selectedFile.name}. ` + msg.text } : msg
+            ));
+            setSelectedFile(null);
+            return;
+        }
+
+        const fileExtension = selectedFile.name.split('.').pop() || '';
+        adjuntosData.push({
+            nombre: selectedFile.name,
+            extension: fileExtension,
+            url: publicUrl
+        });
+
+        setMessages(prevMessages => prevMessages.map(msg => 
+            msg.id === newId && msg.file ? { ...msg, file: { ...msg.file, url: publicUrl, status: 'success' } } : msg
+        ));
+        setSelectedFile(null);
+    } else {
+        setMessages(prevMessages => [...prevMessages, { id: newId, type: 'user', text: userMessageText }]);
+        setChatInput('');
+    }
+
+    const BACKEND_API_URL = process.env.REACT_APP_BACKEND_API_URL;
+    const AGENT_CHAT_ENDPOINT = `${BACKEND_API_URL}/agent/chat`; 
 
     try {
       const response = await fetch(AGENT_CHAT_ENDPOINT, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentToken}`, // <<-- USAR currentToken
+          'Authorization': `Bearer ${currentToken}`,
         },
         body: JSON.stringify({
           idagente: "0",
           msg: userMessageText,
+          adjuntos: adjuntosData,
         }),
       });
 
@@ -158,7 +333,7 @@ function Home() {
   };
 
   const handleUploadClick = () => {
-    alert('Simulando la carga de un archivo...');
+    alert('Simulando la carga de un archivo para Información Adicional...');
     const newId = attachedFiles.length > 0 ? Math.max(...attachedFiles.map(m => m.id)) + 1 : 1;
     setAttachedFiles(prevFiles => [...prevFiles, { id: newId, name: `archivo_subido_${newId}.jpg` }]);
   };
@@ -169,14 +344,57 @@ function Home() {
     navigate('/login');
   };
 
+  // Re-leer el rol y los mensajes iniciales del agente cuando userRole o location cambian
   useEffect(() => {
     setProjectsExpanded(isDesktop);
     if (userRole === 'standard') {
       setMessages(interviewerMessages);
-    } else if (userRole === 'professional') {
+    } else if (userRole === 'professional' || userRole === 'consultant') { // Consolidado el rol aquí
       setMessages(evaluatorMessages);
+    } else {
+      setMessages([]); // Si es "guest" o no hay rol, no mostrar mensajes de agente
     }
-  }, [isDesktop, userRole, interviewerMessages, evaluatorMessages]);
+  }, [isDesktop, userRole, interviewerMessages, evaluatorMessages]); // Añadir location.key si quisieras que el chat se reinicie en cada navegación a /
+
+  // Funciones para selección de archivos y Drag & Drop
+  const handleFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      setSelectedFile(file);
+      setUploadError(null);
+    }
+    if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveSelectedFile = () => {
+    setSelectedFile(null);
+    setUploadError(null);
+    if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDragOver = (event) => {
+    event.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (event) => {
+    event.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    setIsDragOver(false);
+    const file = event.dataTransfer.files[0];
+    if (file) {
+      setSelectedFile(file);
+      setUploadError(null);
+    }
+  };
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', p: '20px', bgcolor: '#F0F2F5' }}>
@@ -408,7 +626,11 @@ function Home() {
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 2,
+                border: isDragOver ? '2px dashed #1976d2' : 'none', // Estilo para drag over
               }}
+              onDragOver={handleDragOver} // Evento drag over
+              onDragLeave={handleDragLeave} // Evento drag leave
+              onDrop={handleDrop} // Evento drop
             >
               {messages.map((message) => (
                 <Box
@@ -440,6 +662,26 @@ function Home() {
                     <Typography variant="body2">
                       {message.text}
                     </Typography>
+                    {/* Visualización del archivo adjunto en el mensaje del chat */}
+                    {message.file && (
+                        <Box sx={{ mt: 1, p: 1, bgcolor: '#e0e0e0', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <DescriptionIcon fontSize="small" />
+                            <Typography variant="caption" sx={{ wordBreak: 'break-all' }}>
+                                {message.file.name}
+                            </Typography>
+                            {message.file.status === 'pending' && <CircularProgress size={16} />}
+                            {message.file.status === 'failed' && (
+                                <Typography variant="caption" color="error">
+                                    (Fallo)
+                                </Typography>
+                            )}
+                            {message.file.status === 'success' && message.file.url && (
+                                <Typography variant="caption" color="primary">
+                                    (Subido)
+                                </Typography>
+                            )}
+                        </Box>
+                    )}
                   </Paper>
                   {message.type === 'user' && (
                     <Avatar sx={{ width: 32, height: 32, ml: 1, bgcolor: '#e0e0e0', flexShrink: 0 }}>
@@ -449,6 +691,34 @@ function Home() {
                 </Box>
               ))}
             </Box>
+
+            {/* Previsualización del archivo seleccionado antes de enviar */}
+            {selectedFile && (
+                <Box sx={{ mt: 1, p: 1, bgcolor: '#f0f0f0', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <DescriptionIcon fontSize="small" />
+                        <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+                            {selectedFile.name}
+                        </Typography>
+                        {isUploadingFile && <CircularProgress size={16} sx={{ ml: 1 }} />}
+                        {uploadError && (
+                            <Typography variant="body2" color="error" sx={{ ml: 1 }}>
+                                {uploadError}
+                            </Typography>
+                        )}
+                    </Box>
+                    <IconButton size="small" onClick={handleRemoveSelectedFile} disabled={isUploadingFile}>
+                        <CloseIcon fontSize="small" />
+                    </IconButton>
+                </Box>
+            )}
+            {/* Input de tipo file oculto */}
+            <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                style={{ display: 'none' }}
+            />
 
             <Box sx={{ display: 'flex', gap: 1, mt: 'auto', flexShrink: 0 }}>
               <TextField
@@ -464,11 +734,25 @@ function Home() {
                   }
                 }}
                 sx={{ mb: 0, '& fieldset': { borderRadius: '8px' } }}
+                // Añadir un adorno de entrada para el botón de adjuntar
+                InputProps={{
+                    endAdornment: (
+                        <InputAdornment position="end">
+                            <IconButton
+                                onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                                disabled={isUploadingFile}
+                            >
+                                <UploadFileIcon />
+                            </IconButton>
+                        </InputAdornment>
+                    ),
+                }}
               />
               <Button
                 variant="contained"
                 onClick={handleSendMessage}
                 sx={{ borderRadius: '8px', px: 3, height: '56px' }}
+                disabled={isUploadingFile} // Deshabilitar enviar mientras se sube
               >
                 <SendIcon />
               </Button>

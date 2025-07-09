@@ -1,5 +1,5 @@
 // src/UserManagerPanel.js
-import React, { useState, useEffect } from 'react'; // <<-- Añadir useEffect
+import React, { useState, useEffect } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -18,6 +18,8 @@ import {
   TableRow,
   IconButton,
   useTheme,
+  CircularProgress,
+  Alert,
 } from '@mui/material';
 import ToggleOnIcon from '@mui/icons-material/ToggleOn';
 import ToggleOffIcon from '@mui/icons-material/ToggleOff';
@@ -28,60 +30,168 @@ import { useNavigate } from 'react-router-dom';
 
 import securityIconAdmin from './assets/security-icon-admin.png';
 
-// Datos de demostración para la tabla de usuarios
-const initialUsers = [
-  { id: 1, email: 'correomuestra@gmail.com', role: 'standard', creationDate: '23/06/2025', isActive: true },
-  { id: 2, email: 'profesional_user@tecem.com', role: 'professional', creationDate: '20/05/2025', isActive: false },
-  { id: 3, email: 'consultor_ia@tecem.com', role: 'consultant', creationDate: '15/04/2025', isActive: true },
-];
-
 function UserManagerPanel() {
   const navigate = useNavigate();
   const theme = useTheme();
-  // El estado 'users' ahora no necesita 'currentRole' aquí, solo en AssignRolesPanel
-  const [users, setUsers] = useState(initialUsers);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const primaryGreen = '#68ab2b';
   const lightGreen = '#e0f2d4';
   const darkGreen = '#528a22';
+
+  const BACKEND_API_URL = process.env.REACT_APP_BACKEND_API_URL;
+
+  // Mapeo de Roles y Status (Frontend a Backend y viceversa)
+  const frontendRoleToBackend = {
+    standard: "1",
+    professional: "2",
+    consultant: "3",
+  };
+
+  const backendRoleToFrontend = {
+    "1": "standard",
+    "2": "professional",
+    "3": "consultant",
+  };
+
+  const frontendStatusToBackend = {
+    true: "A", // Activo
+    false: "I", // Inactivo
+  };
+
+  const backendStatusToFrontend = {
+    "A": true, // Activo
+    "I": false, // Inactivo
+  };
+
+  // Función para obtener la lista de usuarios
+  const fetchUsers = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/management/user/`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          // 'Authorization': `Bearer ${adminToken}`, // Si fuera necesario, añadir token de admin aquí
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: response.statusText }));
+        throw new Error(`Error al listar usuarios: ${response.status} - ${errorData.message || 'Error desconocido'}`);
+      }
+
+      const data = await response.json();
+      // <<-- CAMBIO CLAVE AQUÍ: Usar idusuario y mapear rol y estado -->>
+      const mappedUsers = data.users.map(user => ({
+        id: user.idusuario, // <<-- Usar idusuario como ID para la key de React y para las peticiones
+        email: user.email,
+        role: backendRoleToFrontend[user.rol.codrol] || user.rol.rol, // Mapear rol numérico a string
+        creationDate: user.fecregistro,
+        isActive: backendStatusToFrontend[user.estado] || false,
+      }));
+      setUsers(mappedUsers);
+    } catch (err) {
+      console.error("Error fetching users:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   const handleAdminLogout = () => {
     localStorage.removeItem('adminRole');
     navigate('/admin-login');
   };
 
-  const handleToggleUserStatus = (userId) => {
-    setUsers(users.map(user =>
-      user.id === userId ? { ...user, isActive: !user.isActive } : user
-    ));
-    alert(`Simulando cambio de estado para usuario con ID: ${userId}`);
+  const handleToggleUserStatus = async (userId, currentStatus) => {
+    setError(null);
+    try {
+      const newBackendStatus = frontendStatusToBackend[!currentStatus]; // 'A' o 'I'
+      const url = `${BACKEND_API_URL}/management/user/${userId}`; // <<-- userId (que es idusuario) en la URL
+      console.log(`Intentando PUT para actualizar estado: ${url} con body:`, { status: newBackendStatus });
+
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          // 'Authorization': `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({ status: newBackendStatus }), // Solo enviar el campo status
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: response.statusText }));
+        throw new Error(`Error al actualizar estado: ${response.status} - ${errorData.message || 'Error desconocido'}`);
+      }
+
+      if (response.status !== 204) {
+          await response.json();
+      }
+      
+      setUsers(users.map(user =>
+        user.id === userId ? { ...user, isActive: !user.isActive } : user
+      ));
+      alert(`Estado de ${userId} actualizado a ${newBackendStatus}.`);
+
+    } catch (err) {
+      console.error("Error toggling user status:", err);
+      setError(err.message);
+    }
   };
 
-  const handleDeleteUser = (userId) => {
-    if (window.confirm(`¿Estás seguro de que quieres eliminar al usuario con ID: ${userId}?`)) {
+  const handleDeleteUser = async (userId) => {
+    setError(null);
+    if (!window.confirm(`¿Estás seguro de que quieres eliminar al usuario con ID: ${userId}?`)) {
+      return;
+    }
+    try {
+      const url = `${BACKEND_API_URL}/management/user/${userId}`; // <<-- userId (que es idusuario) en la URL
+      console.log(`Intentando DELETE para eliminar usuario: ${url}`);
+
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          // 'Authorization': `Bearer ${adminToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: response.statusText }));
+        throw new Error(`Error al eliminar usuario: ${response.status} - ${errorData.message || 'Error desconocido'}`);
+      }
+
+      if (response.status !== 204) {
+          await response.json();
+      }
+      
       setUsers(users.filter(user => user.id !== userId));
-      alert(`Usuario con ID: ${userId} eliminado.`);
+      alert(`Usuario ${userId} eliminado.`);
+
+    } catch (err) {
+      console.error("Error deleting user:", err);
+      setError(err.message);
     }
   };
 
   const handleSaveChanges = () => {
-    alert('Simulando guardar cambios de usuarios.');
-    console.log('Usuarios actuales:', users);
+    alert('Grabar cambios aquí es solo para el estado local de esta vista si las actualizaciones son individuales.');
+    console.log('Usuarios actuales en UI (no se envían todos aquí):', users);
   };
 
-  // Nueva función para navegar a la página de asignación de roles
   const handleNavigateToAssignRoles = () => {
-    navigate('/assign-roles'); // <<-- Navegar a la nueva ruta
+    navigate('/assign-roles');
   };
 
-  // Para asegurar que la opción "Listar usuarios" esté siempre activa en este panel
-  const [activeAction, setActiveAction] = useState('listUsers'); // Mantenemos un estado para resaltar la acción activa
-
-  // useEffect para manejar el resaltado del menú si la URL cambia (aunque aquí lo controlamos por clic)
-  useEffect(() => {
-    // Si la URL fuera dinámica, podrías usar useLocation aquí para ajustar activeAction
-  }, []);
-
+  const [activeAction, setActiveAction] = useState('listUsers');
 
   return (
     <Box
@@ -166,11 +276,11 @@ function UserManagerPanel() {
           </Typography>
           <List disablePadding>
             <ListItemButton
-              onClick={() => setActiveAction('listUsers')} // Para resaltar visualmente
+              onClick={() => setActiveAction('listUsers')}
               sx={{
                 borderRadius: '4px',
                 mb: 1,
-                bgcolor: activeAction === 'listUsers' ? lightGreen : 'transparent', // Resaltar si está activo
+                bgcolor: activeAction === 'listUsers' ? lightGreen : 'transparent',
                 color: activeAction === 'listUsers' ? primaryGreen : 'text.primary',
                 '&:hover': {
                   bgcolor: activeAction === 'listUsers' ? lightGreen : '#f5f5f5',
@@ -180,11 +290,11 @@ function UserManagerPanel() {
               <ListItemText primary="Listar usuarios" />
             </ListItemButton>
             <ListItemButton
-              onClick={handleNavigateToAssignRoles} // <<-- Navegar a la nueva página
+              onClick={handleNavigateToAssignRoles}
               sx={{
                 borderRadius: '4px',
                 mb: 1,
-                bgcolor: activeAction === 'assignRoles' ? lightGreen : 'transparent', // Resaltar si está activo (en esta vista no se activará)
+                bgcolor: activeAction === 'assignRoles' ? lightGreen : 'transparent',
                 color: activeAction === 'assignRoles' ? primaryGreen : 'text.primary',
                 '&:hover': {
                   bgcolor: activeAction === 'assignRoles' ? lightGreen : '#f5f5f5',
@@ -196,7 +306,7 @@ function UserManagerPanel() {
           </List>
         </Paper>
 
-        {/* Columna Derecha: Lista de Usuarios (Fija en este panel) */}
+        {/* Columna Derecha: Lista de Usuarios */}
         <Paper
           elevation={0}
           sx={{
@@ -207,43 +317,72 @@ function UserManagerPanel() {
             flexDirection: 'column',
           }}
         >
-          {/* Contenido de la vista de Listar usuarios */}
-          <TableContainer component={Box} sx={{ flexGrow: 1, mb: 3 }}>
-            <Table stickyHeader aria-label="user list table">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold' }}>EMAIL</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Rol</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Creación</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Tools</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.role}</TableCell>
-                    <TableCell>{user.creationDate}</TableCell>
-                    <TableCell>
-                      <IconButton
-                        color={user.isActive ? 'success' : 'default'}
-                        onClick={() => handleToggleUserStatus(user.id)}
-                        sx={{ color: user.isActive ? primaryGreen : theme.palette.action.disabled }}
-                      >
-                        {user.isActive ? <ToggleOnIcon /> : <ToggleOffIcon />}
-                      </IconButton>
-                      <IconButton
-                        color="error"
-                        onClick={() => handleDeleteUser(user.id)}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </TableCell>
+          {loading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+              <CircularProgress sx={{ color: primaryGreen }} />
+              <Typography sx={{ ml: 2 }}>Cargando usuarios...</Typography>
+            </Box>
+          )}
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              Error: {error}
+            </Alert>
+          )}
+          {!loading && !error && users.length === 0 && (
+            <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+              No se encontraron usuarios.
+            </Typography>
+          )}
+          {!loading && users.length > 0 && (
+            <TableContainer component={Box} sx={{ flexGrow: 1, mb: 3 }}>
+              <Table stickyHeader aria-label="user list table">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 'bold' }}>EMAIL</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Rol</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Creación</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Tools</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {users.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>{user.role}</TableCell>
+                      <TableCell>{user.creationDate}</TableCell>
+                      <TableCell>
+                        {user.isActive ? (
+                          <Typography variant="body2" sx={{ color: primaryGreen, fontWeight: 'bold' }}>
+                            Activo
+                          </Typography>
+                        ) : (
+                          <Typography variant="body2" color="error" sx={{ fontWeight: 'bold' }}>
+                            Inactivo
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <IconButton
+                          color={user.isActive ? 'success' : 'default'}
+                          onClick={() => handleToggleUserStatus(user.id, user.isActive)} // user.id es idusuario
+                          sx={{ color: user.isActive ? primaryGreen : theme.palette.action.disabled }}
+                        >
+                          {user.isActive ? <ToggleOnIcon /> : <ToggleOffIcon />}
+                        </IconButton>
+                        <IconButton
+                          color="error"
+                          onClick={() => handleDeleteUser(user.id)} // user.id es idusuario
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
 
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 'auto', pt: 2, borderTop: '1px solid #eee' }}>
             <Button

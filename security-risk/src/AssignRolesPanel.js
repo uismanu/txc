@@ -1,5 +1,5 @@
 // src/AssignRolesPanel.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -17,7 +17,9 @@ import {
   TableHead,
   TableRow,
   IconButton,
-  // useTheme, // <<-- ELIMINADO: 'theme' ya no se usa
+  useTheme,
+  CircularProgress,
+  Alert,
 } from '@mui/material';
 import AdjustIcon from '@mui/icons-material/Adjust';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
@@ -27,22 +29,71 @@ import { useNavigate } from 'react-router-dom';
 
 import securityIconAdmin from './assets/security-icon-admin.png';
 
-// Datos de demostración para la tabla de usuarios
-const initialUsersForRoles = [
-  { id: 1, email: 'correomuestra@gmail.com', role: 'standard' },
-  { id: 2, email: 'profesional_user@tecem.com', role: 'professional' },
-  { id: 3, email: 'consultor_ia@tecem.com', role: 'consultant' },
-];
-
 function AssignRolesPanel() {
   const navigate = useNavigate();
-  // const theme = useTheme(); // <<-- ELIMINADA: 'theme' ya no se usa
-
-  const [users, setUsers] = useState(initialUsersForRoles.map(user => ({ ...user, currentRole: user.role })));
+  const theme = useTheme();
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const primaryGreen = '#68ab2b';
   const lightGreen = '#e0f2d4';
   const darkGreen = '#528a22';
+
+  const BACKEND_API_URL = process.env.REACT_APP_BACKEND_API_URL;
+
+  // Mapeo de Roles (Frontend a Backend y viceversa)
+  const frontendRoleToBackend = {
+    standard: "1",
+    professional: "2",
+    consultant: "3",
+  };
+
+  const backendRoleToFrontend = {
+    "1": "standard",
+    "2": "professional",
+    "3": "consultant",
+  };
+
+  const roles = ['standard', 'professional', 'consultant']; // Roles disponibles en frontend (strings)
+
+  // Función para obtener la lista de usuarios (similar a UserManagerPanel)
+  const fetchUsers = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/management/user/`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          // 'Authorization': `Bearer ${adminToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: response.statusText }));
+        throw new Error(`Error al listar usuarios para roles: ${response.status} - ${errorData.message || 'Error desconocido'}`);
+      }
+
+      const data = await response.json();
+      // <<-- CAMBIO CLAVE AQUÍ: Usar idusuario y mapear rol -->>
+      const mappedUsers = data.users.map(user => ({
+        id: user.idusuario, // <<-- Usar idusuario como ID único
+        email: user.email,
+        currentRole: backendRoleToFrontend[user.rol.codrol] || user.rol.rol, // Rol actual para la edición
+      }));
+      setUsers(mappedUsers);
+    } catch (err) {
+      console.error("Error fetching users for roles:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   const handleAdminLogout = () => {
     localStorage.removeItem('adminRole');
@@ -53,19 +104,52 @@ function AssignRolesPanel() {
     navigate('/user-manager');
   };
 
-  const handleRoleChange = (userId, newRole) => {
-    setUsers(users.map(user =>
-      user.id === userId ? { ...user, currentRole: newRole } : user
-    ));
+  // Manejador para el cambio de rol
+  const handleRoleChange = async (userId, newFrontendRole) => {
+    setError(null);
+    const newBackendRole = frontendRoleToBackend[newFrontendRole]; // Convertir a "1", "2" o "3"
+    if (!newBackendRole) {
+        setError("Rol no válido seleccionado.");
+        return;
+    }
+
+    try {
+      const url = `${BACKEND_API_URL}/management/user/${userId}`; // <<-- userId (que es idusuario) en la URL
+      console.log(`Intentando PUT para actualizar rol: ${url} con body:`, { role: newBackendRole });
+
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          // 'Authorization': `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({ role: newBackendRole }), // Solo enviar el campo role
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: response.statusText }));
+        throw new Error(`Error al actualizar rol: ${response.status} - ${errorData.message || 'Error desconocido'}`);
+      }
+
+      if (response.status !== 204) {
+          await response.json();
+      }
+      
+      setUsers(users.map(user =>
+        user.id === userId ? { ...user, currentRole: newFrontendRole } : user
+      ));
+      alert(`Rol de ${userId} actualizado a ${newFrontendRole}.`);
+
+    } catch (err) {
+      console.error("Error updating user role:", err);
+      setError(err.message);
+    }
   };
 
   const handleSaveChanges = () => {
-    alert('Simulando guardar cambios de roles de usuarios.');
-    console.log('Roles asignados:', users.map(u => ({ id: u.id, email: u.email, role: u.currentRole })));
-    navigate('/user-manager');
+    alert('Grabar cambios aquí es solo para el estado local de esta vista si las actualizaciones son individuales.');
+    console.log('Roles actuales en UI:', users);
   };
-
-  const roles = ['standard', 'professional', 'consultant'];
 
   return (
     <Box
@@ -90,8 +174,22 @@ function AssignRolesPanel() {
         }}
       >
         <Toolbar sx={{ justifyContent: 'space-between' }}>
-          {/* Sección izquierda del AppBar: Icono y Título */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Button
+                variant="text"
+                startIcon={<ArrowBackIcon />}
+                onClick={handleBackToUserManager}
+                sx={{
+                  textTransform: 'none',
+                  borderRadius: '8px',
+                  color: primaryGreen,
+                  '&:hover': {
+                    bgcolor: lightGreen,
+                  },
+                }}
+            >
+              Volver
+            </Button>
             <img src={securityIconAdmin} alt="Security Icon" style={{ width: '32px', height: '32px', ml: 1 }} />
             <Typography
               variant="h5"
@@ -101,46 +199,24 @@ function AssignRolesPanel() {
               Security Risk Management Assistant - Panel User Manager
             </Typography>
           </Box>
-          {/* Sección derecha del AppBar: Botón Volver y Cerrar Sesión Admin */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Button
-                variant="outlined"
-                startIcon={<ArrowBackIcon />}
-                onClick={handleBackToUserManager}
-                sx={{
-                  textTransform: 'none',
-                  borderRadius: '8px',
-                  borderColor: primaryGreen,
-                  color: primaryGreen,
-                  bgcolor: 'background.paper',
-                  '&:hover': {
-                    bgcolor: lightGreen,
-                    borderColor: darkGreen,
-                  },
-                  mr: 1,
-                }}
-            >
-              Volver
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<ExitToAppIcon />}
-              onClick={handleAdminLogout}
-              sx={{
-                textTransform: 'none',
-                borderRadius: '8px',
-                borderColor: primaryGreen,
-                color: primaryGreen,
-                bgcolor: 'background.paper',
-                '&:hover': {
-                  bgcolor: lightGreen,
-                  borderColor: darkGreen,
-                },
-              }}
-            >
-              Cerrar Sesión Admin
-            </Button>
-          </Box>
+          <Button
+            variant="outlined"
+            startIcon={<ExitToAppIcon />}
+            onClick={handleAdminLogout}
+            sx={{
+              textTransform: 'none',
+              borderRadius: '8px',
+              borderColor: primaryGreen,
+              color: primaryGreen,
+              bgcolor: 'background.paper',
+              '&:hover': {
+                bgcolor: lightGreen,
+                borderColor: darkGreen,
+              },
+            }}
+          >
+            Cerrar Sesión Admin
+          </Button>
         </Toolbar>
       </AppBar>
 
@@ -190,7 +266,7 @@ function AssignRolesPanel() {
               sx={{
                 borderRadius: '4px',
                 mb: 1,
-                bgcolor: lightGreen,
+                bgcolor: lightGreen, // Resaltar "Asignar roles a usuario" en esta vista
                 color: primaryGreen,
                 '&:hover': {
                   bgcolor: lightGreen,
@@ -213,43 +289,56 @@ function AssignRolesPanel() {
             flexDirection: 'column',
           }}
         >
-          <TableContainer component={Box} sx={{ flexGrow: 1, mb: 3 }}>
-            <Table stickyHeader aria-label="assign roles table">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold' }}>User</TableCell>
-                  {roles.map(role => (
-                    <TableCell key={role} align="center" sx={{ fontWeight: 'bold', textTransform: 'capitalize' }}>
-                      {role}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>{user.email}</TableCell>
+          {loading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+              <CircularProgress sx={{ color: primaryGreen }} />
+              <Typography sx={{ ml: 2 }}>Cargando usuarios...</Typography>
+            </Box>
+          )}
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              Error: {error}
+            </Alert>
+          )}
+          {!loading && !error && users.length === 0 && (
+            <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+              No se encontraron usuarios para asignar roles.
+            </Typography>
+          )}
+          {!loading && users.length > 0 && (
+            <TableContainer component={Box} sx={{ flexGrow: 1, mb: 3 }}>
+              <Table stickyHeader aria-label="assign roles table">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 'bold' }}>User</TableCell>
                     {roles.map(role => (
-                      <TableCell key={role} align="center">
-                        <IconButton
-                          onClick={() => handleRoleChange(user.id, role)}
-                          color={user.currentRole === role ? 'primary' : 'default'}
-                          // Aquí, si necesitas acceder al tema (theme.palette.action.disabled),
-                          // entonces sí necesitarías usar el hook useTheme().
-                          // Por ahora, como primaryGreen y text.disabled son valores directos,
-                          // no es estrictamente necesario, pero si se necesitan colores de la paleta,
-                          // useTheme sería necesario.
-                          sx={{ color: user.currentRole === role ? primaryGreen : 'text.disabled' }}
-                        >
-                          <AdjustIcon />
-                        </IconButton>
+                      <TableCell key={role} align="center" sx={{ fontWeight: 'bold', textTransform: 'capitalize' }}>
+                        {role}
                       </TableCell>
                     ))}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {users.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>{user.email}</TableCell>
+                      {roles.map(role => (
+                        <TableCell key={role} align="center">
+                          <IconButton
+                            onClick={() => handleRoleChange(user.id, role)} // user.id es idusuario
+                            color={user.currentRole === role ? 'primary' : 'default'}
+                            sx={{ color: user.currentRole === role ? primaryGreen : 'text.disabled' }}
+                          >
+                            <AdjustIcon />
+                          </IconButton>
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
 
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 'auto', pt: 2, borderTop: '1px solid #eee' }}>
             <Button

@@ -7,11 +7,11 @@ import {
   Button,
   Paper,
   Alert,
-  Divider, // Para separar el login tradicional del de Google
+  Divider,
 } from '@mui/material';
 import tecemLogo from './assets/tecem-logo.png';
-import { useNavigate, useLocation } from 'react-router-dom'; // Importa useNavigate y useLocation para navegación y manejo de rutas
-import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google'; // <<-- NUEVAS IMPORTACIONES
+import { useNavigate, useLocation } from 'react-router-dom';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 
 function Login() {
   const [username, setUsername] = useState('');
@@ -20,50 +20,52 @@ function Login() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // URL del backend desde las variables de entorno
   const BACKEND_API_URL = process.env.REACT_APP_BACKEND_API_URL;
-  const GOOGLE_AUTH_ENDPOINT = `${BACKEND_API_URL}/auth/google/token`; // Endpoint para enviar el token de Google
+  const GOOGLE_AUTH_ENDPOINT = `${BACKEND_API_URL}/auth/google/token`;
+
+  // <<-- NUEVO: Mapeo de códigos de rol del backend a nombres de rol del frontend -->>
+  const backendRoleCodeToFrontend = {
+    "1": "standard",
+    "2": "professional",
+    "3": "consultant",
+  };
 
   useEffect(() => {
     console.log("Ruta actual en Login.js:", location.pathname);
-    // Limpia cualquier token o rol al llegar a la página de login
-    localStorage.removeItem('userToken'); // Nuevo token de aplicación
+    localStorage.removeItem('userToken');
     localStorage.removeItem('userRole');
-    localStorage.removeItem('adminRole'); // Asegurarse de limpiar también el rol de admin si existe
+    localStorage.removeItem('adminRole');
   }, [location]);
 
-  // Manejador para el login tradicional (manteniendo como alternativa)
   const handleTraditionalLogin = (event) => {
     event.preventDefault();
     setError('');
 
+    // <<-- Actualizar login tradicional para usar el mapeo -->>
+    let assignedRole = '';
     if (username === 'standard' && password === 'pass') {
-      // Simular un token de aplicación para login tradicional
-      localStorage.setItem('userToken', 'fake-standard-token');
-      localStorage.setItem('userRole', 'standard');
-      navigate('/');
+      assignedRole = backendRoleCodeToFrontend["1"]; // Asigna "standard"
     } else if (username === 'professional' && password === 'pass') {
-      // Simular un token de aplicación para login tradicional
-      localStorage.setItem('userToken', 'fake-professional-token');
-      localStorage.setItem('userRole', 'professional');
-      navigate('/');
+      assignedRole = backendRoleCodeToFrontend["2"]; // Asigna "professional"
     } else {
       setError('Usuario o contraseña incorrectos.');
+      return;
     }
+    localStorage.setItem('userToken', `fake-${assignedRole}-token`);
+    localStorage.setItem('userRole', assignedRole);
+    navigate('/');
   };
 
-  // Manejador para el éxito del login con Google
   const handleGoogleSuccess = async (response) => {
     console.log("Login de Google Exitoso. Credential (JWT de Google):", response.credential);
 
     try {
-      // Envía el JWT de Google al backend para validación y obtención del token de tu app
       const backendResponse = await fetch(GOOGLE_AUTH_ENDPOINT, {
-        method: 'POST', // Método HTTP POST según lo que el backend espere (Postman muestra PUT, pero para token suele ser POST)
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ googleToken: response.credential }), // Enviar el JWT de Google
+        body: JSON.stringify({ googleToken: response.credential }),
       });
 
       if (!backendResponse.ok) {
@@ -72,33 +74,31 @@ function Login() {
       }
 
       const data = await backendResponse.json();
-      // Asumimos que el backend devuelve { token: "tu_app_token", role: "standard"|"professional" }
       const appToken = data.token;
-      const userRoleFromBackend = data.role;
+      // <<-- CAMBIO CLAVE AQUÍ: Mapear el rol recibido del backend (codrol) a la cadena de frontend -->>
+      const userRoleFromBackendCode = data.role; // Asumo que el backend aún devuelve solo el codrol aquí
+      const mappedUserRole = backendRoleCodeToFrontend[userRoleFromBackendCode];
 
-      if (!appToken || !userRoleFromBackend) {
-          throw new Error("El backend no proporcionó un token o rol válido.");
+      if (!appToken || !mappedUserRole) { // Verificar el mapeo también
+          throw new Error("El backend no proporcionó un token o rol válido/mapeable.");
       }
 
-      localStorage.setItem('userToken', appToken); // Almacena el token de tu aplicación
-      localStorage.setItem('userRole', userRoleFromBackend); // Almacena el rol del usuario
+      localStorage.setItem('userToken', appToken);
+      localStorage.setItem('userRole', mappedUserRole); // Guardar el rol como string (standard, professional, etc.)
 
-      navigate('/'); // Redirige al Home
+      navigate('/');
     } catch (error) {
       console.error("Error en la autenticación con el backend de Google:", error);
       setError(`No se pudo iniciar sesión con Google: ${error.message}`);
     }
   };
 
-  // Manejador para errores en el login de Google
   const handleGoogleError = (errorResponse) => {
     console.error("Login de Google Fallido:", errorResponse);
     setError('No se pudo iniciar sesión con Google. Inténtalo de nuevo.');
   };
 
   return (
-    // Es CRÍTICO que el componente esté envuelto en GoogleOAuthProvider en App.js
-    // El clientId se obtiene de las variables de entorno para seguridad.
     <Box
       sx={{
         display: 'flex',
